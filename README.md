@@ -79,6 +79,24 @@ Editable saves live separately in `%USERPROFILE%\Documents\UmbraForge`, so
 reinstalling or updating the app never touches your projects. Set
 `UMBRAFORGE_SAVES` to use a different folder.
 
+### Verify the download
+
+Releases are **not code-signed yet**, so Windows SmartScreen may show
+"Unknown publisher" the first time you run the installer or the app. That is
+expected; a trusted signature requires a certificate issued to a registered
+legal entity. See [CODE_SIGNING.md](CODE_SIGNING.md) for the status and the path
+to signed builds.
+
+Verify the bundle before running it:
+
+```powershell
+Get-FileHash .\UmbraForge-<version>.zip -Algorithm SHA256
+```
+
+The digest must match the one in the release notes and in the release's
+`SHA256SUMS.txt`. If it does not, do not run the file; report it through
+[SECURITY.md](SECURITY.md).
+
 ### From source
 
 ```powershell
