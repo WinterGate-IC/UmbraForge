@@ -4,12 +4,14 @@ The build intermediates stay under ``build/``. One file is published:
 
     releases/UmbraForge-<timestamp>.zip
 
-It contains exactly four items, matching the VoiceForge release pattern:
+It contains exactly six items, matching the VoiceForge release pattern:
 
     UmbraForge-<version>-windows-x64.zip   portable package
     UmbraForge-Setup-<version>.exe         offline per-user installer
     README.md
     LICENSE
+    TRADEMARKS.md                          name and authorship terms
+    CODE_SIGNING.md                        signing status and verification
 
 The package contains a frozen ``UmbraForge.exe`` so the target machine needs no
 Python and no pip. The setup executable embeds the package zip as its payload.
@@ -51,10 +53,14 @@ PACKAGE_FILES = (
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
+    "TRADEMARKS.md",
+    "CODE_SIGNING.md",
     "Register UmbraForge Files.cmd",
     "register_file_types.ps1",
 )
 PACKAGE_DIRS = ("licenses",)
+RELEASE_DOCS = ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+                "TRADEMARKS.md", "CODE_SIGNING.md")
 
 IS_WINDOWS = sys.platform.startswith("win")
 
@@ -187,10 +193,11 @@ def make_release(package: Path, setup_exe: Path) -> Path:
                          compresslevel=6, allowZip64=True) as zf:
         zf.write(package, package.name)
         zf.write(setup_exe, setup_exe.name)
-        for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+        for name in RELEASE_DOCS:
             source = ROOT / name
-            if source.exists():
-                zf.write(source, name)
+            if not source.is_file():
+                raise SystemExit(f"the release is missing {name}")
+            zf.write(source, name)
         licenses = ROOT / "licenses"
         if licenses.is_dir():
             for path in sorted(licenses.rglob("*")):
