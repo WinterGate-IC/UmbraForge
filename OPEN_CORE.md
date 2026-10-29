@@ -40,7 +40,8 @@ licence. It cannot *create* one. The signing key stays offline.
    Menu entries for unlicensed features stay disabled; hooks for unlicensed
    features are skipped.
 4. Every valuable operation in the add-on also calls
-   `licensing.require("feature")`. Importing the code is not enough to run it.
+   `licensing.require("feature")` (or uses the `@licensing.licensed("feature")`
+   decorator). Importing the code is not enough to run it.
 
 Licence tokens are offline-verifiable RSA PKCS#1 v1.5 / SHA-256 signatures:
 

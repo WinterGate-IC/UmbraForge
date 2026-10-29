@@ -91,6 +91,29 @@ def test_require_with_licence(monkeypatch: pytest.MonkeyPatch) -> None:
         licensing.require("studio")
 
 
+def test_licensed_decorator_blocks_before_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+
+    @licensing.licensed("batch")
+    def work(value: int) -> int:
+        calls.append(value)
+        return value * 2
+
+    monkeypatch.setattr(licensing, "active_license", lambda **_: None)
+    with pytest.raises(licensing.LicenseError):
+        work(1)
+    assert calls == []
+
+    licence = licensing.License(
+        product="umbraforge", edition="pro", licensee="T", email="", license_id="",
+        issued=None, expires=None, features=frozenset({"batch"}), max_machines=1,
+        machine=None,
+    )
+    monkeypatch.setattr(licensing, "active_license", lambda **_: licence)
+    assert work(2) == 4
+    assert calls == [2]
+
+
 def test_install_and_revoke(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "license.key"
     monkeypatch.setattr(licensing, "default_license_path", lambda: target)
