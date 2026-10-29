@@ -61,6 +61,9 @@ def test_machine_binding() -> None:
     assert licence.machine == "test-machine-0001"
     with pytest.raises(licensing.LicenseError, match="different machine"):
         licensing.parse_token(bound, machine="some-other-machine", today=BEFORE_EXPIRY)
+    # Omitting the machine must fail closed, not skip the binding check.
+    with pytest.raises(licensing.LicenseError, match="different machine"):
+        licensing.parse_token(bound, today=BEFORE_EXPIRY)
 
 
 def test_malformed_tokens_are_rejected() -> None:
