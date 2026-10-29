@@ -1,0 +1,5 @@
+# Optional AI background removal.
+# The app works without these; the AI cutout method simply stays unavailable.
+-r requirements.txt
+rembg>=2.0.57
+onnxruntime>=1.17

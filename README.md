@@ -11,10 +11,6 @@ composition.
 A [WinterGate Intelligence Collective](https://wintergate.org) tool by
 AnonCatalyst.
 
-# DOWNLOAD LINK
-- https://mega.nz/file/asxTGK6L#CkMgPLcvezzpi7gav3LqALvPwA-JfIw1qRgCkvsxgj4
-- https://transfer.it/t/fcAG75wgSILT
-  
 ---
 
 ## What it does
@@ -59,7 +55,9 @@ AnonCatalyst.
 
 ## Install (Windows)
 
-Open the release zip in `releases/`. Inside it you will find:
+Download the latest release from the
+[releases page](https://github.com/WinterGate-IC/UmbraForge/releases). Inside
+it you will find:
 
 | Item | What it is |
 |---|---|
@@ -67,6 +65,7 @@ Open the release zip in `releases/`. Inside it you will find:
 | `UmbraForge-Setup-0.1.1.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
+| `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
 
 The installer needs **no Python, no pip and no internet connection**. Run it
 from anywhere, including after copying it to another drive or machine. The
@@ -83,7 +82,7 @@ reinstalling or updating the app never touches your projects. Set
 ### From source
 
 ```powershell
-cd C:\Users\zerop\Desktop\Development\umbraforge
+cd umbraforge
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
@@ -260,6 +259,27 @@ rendering and rail thumbnails, paired project saves, the Saves menu, the
 unified save dialog and an offscreen UI smoke test. Tests run headless with
 `QT_QPA_PLATFORM=offscreen` (set automatically in `tests/conftest.py`).
 
+## Build the release
+
+```powershell
+.venv\Scripts\python.exe -m pip install pyinstaller
+.venv\Scripts\python.exe tools\build_release.py
+```
+
+The builder freezes the app, stages the portable package, builds the offline
+Setup executable and writes one timestamped bundle to `releases/`. That bundle
+contains the portable package zip, the Setup executable, `README.md`, `LICENSE`
+and `THIRD_PARTY_NOTICES.md`.
+
+## Licence
+
+UmbraForge's own source is released under the MIT licence (see `LICENSE`).
+Bundled third-party libraries keep their own licences; see
+`THIRD_PARTY_NOTICES.md` and the `licenses/` folder. In particular, the
+portable build bundles Qt for Python (PySide6), which is LGPL-3.0. The build
+script and complete source are in this repository, so the bundled Qt libraries
+can be replaced by rebuilding with a different Qt build.
+
 ## Project layout
 
 ```
@@ -273,8 +293,10 @@ umbraforge/
 ├─ requirements.txt        PySide6, Pillow, numpy
 ├─ requirements-ai.txt     optional rembg + onnxruntime
 ├─ LICENSE                 MIT licence
+├─ THIRD_PARTY_NOTICES.md  bundled-library licences
+├─ licenses/               full LGPL/GPL texts
 ├─ tools/build_release.py  package zip + installer builder
-├─ releases/               built release artifacts
+├─ releases/               local build output (not committed)
 ├─ src/umbraforge/
 │  ├─ app.py               QApplication bootstrap and CLI
 │  ├─ branding.py          WinterGate identity and the drawn app mark
@@ -296,9 +318,11 @@ umbraforge/
 
 ## Status
 
-Version 0.1.1 is the current Windows release. It ships as a portable package
-zip plus an offline per-user installer under `releases/`, built by
-`tools/build_release.py`. The source tree also runs directly (see **Install**).
+Version 0.1.1 is the current Windows release. It ships as one timestamped
+release bundle attached to the GitHub release and containing the portable
+package, the offline per-user installer, `README.md`, `LICENSE` and
+`THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
+also runs directly (see **Install**).
 
 What changed in 0.1.1:
 
