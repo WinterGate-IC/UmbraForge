@@ -24,7 +24,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import backgrounds, branding, fonts, geometry, imaging, renderer, templates, text_styles, theme
+from .. import (
+    backgrounds,
+    branding,
+    extensions,
+    fonts,
+    geometry,
+    imaging,
+    licensing,
+    renderer,
+    templates,
+    text_styles,
+    theme,
+)
 from ..layers import (
     Design,
     History,
@@ -208,6 +220,58 @@ class MainWindow(QMainWindow):
         help_menu = bar.addMenu("&Help")
         help_menu.addAction(self.act_guide)
         help_menu.addAction(self.act_about)
+
+        self.addons_menu = bar.addMenu("&Add-ons")
+        self._rebuild_addons_menu()
+
+    def _rebuild_addons_menu(self) -> None:
+        """Show contributions from licensed add-ons, plus licence status."""
+        menu = self.addons_menu
+        menu.clear()
+        entries = extensions.registry.menu_entries("Add-ons")
+        for entry in entries:
+            action = menu.addAction(entry.label)
+            if entry.tooltip:
+                action.setStatusTip(entry.tooltip)
+            enabled = extensions.registry.allows(entry.feature)
+            action.setEnabled(enabled)
+            if not enabled:
+                action.setToolTip(
+                    "This action needs a WinterGate licence that includes "
+                    f"{entry.feature!r}. See Add-ons > Licence status."
+                )
+            action.triggered.connect(
+                lambda _checked=False, callback=entry.callback: callback()
+            )
+        if entries:
+            menu.addSeparator()
+        status = menu.addAction("Licence status...")
+        status.triggered.connect(self._show_license_status)
+
+    def _show_license_status(self) -> None:
+        status = licensing.describe_status()
+        if not status["licensed"]:
+            text = (
+                "UmbraForge open-source edition.\n\n"
+                "Every feature in this build is available without a licence. "
+                "Optional add-ons stay disabled until a valid licence is installed.\n\n"
+                f"Machine id: {status['machine']}\n"
+                "Install a licence with:\n"
+                "  umbraforge --install-license <file>\n\n"
+                "Licences: https://wintergate.org"
+            )
+        else:
+            expiry = "never (perpetual)" if status["perpetual"] else status["expires"]
+            text = (
+                f"Edition: {status['edition']}\n"
+                f"Licensed to: {status['licensee']} <{status['email']}>\n"
+                f"Licence id: {status['id']}\n"
+                f"Expires: {expiry}\n"
+                f"Features: {', '.join(status['features'])}\n"
+                f"Machine bound: {'yes' if status['machine_bound'] else 'no'}\n"
+                f"Licence file: {status['license_path']}"
+            )
+        QMessageBox.information(self, "Licence status", text)
 
     def _build_ui(self) -> None:
         central = QWidget()

@@ -10,3 +10,10 @@ dist/
 *.umbra
 releases/
 *.zip
+
+# Licence files belong in the user's config folder, not the repository.
+/license.key
+*.license
+!tests/fixtures/*.license
+*.key
+keys/

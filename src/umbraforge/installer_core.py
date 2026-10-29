@@ -42,6 +42,18 @@ IGNORE = shutil.ignore_patterns(
 IS_WINDOWS = sys.platform.startswith("win")
 
 
+def _fs_path(path: Path | str) -> str:
+    """Return a Windows extended-length path when the normal path is too long."""
+    text = os.fspath(path)
+    if not IS_WINDOWS or text.startswith("\\\\?\\"):
+        return text
+    if len(text) < 240:
+        return text
+    if text.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + text[2:]
+    return "\\\\?\\" + os.path.abspath(text)
+
+
 def default_app_dir() -> Path:
     return Path.home() / "AppData" / "Local" / "Programs" / APP_NAME
 
@@ -110,8 +122,8 @@ def _extract_payload(payload: Path, app_dir: Path) -> None:
     with zipfile.ZipFile(payload) as archive:
         for info, relative in _safe_members(archive, app_dir):
             target = app_dir / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(info) as source, open(target, "wb") as sink:
+            os.makedirs(_fs_path(target.parent), exist_ok=True)
+            with archive.open(info) as source, open(_fs_path(target), "wb") as sink:
                 shutil.copyfileobj(source, sink)
 
 

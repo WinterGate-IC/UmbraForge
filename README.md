@@ -280,6 +280,10 @@ portable build bundles Qt for Python (PySide6), which is LGPL-3.0. The build
 script and complete source are in this repository, so the bundled Qt libraries
 can be replaced by rebuilding with a different Qt build.
 
+The name and logo are not part of the MIT grant; see `TRADEMARKS.md`.
+`OPEN_CORE.md` explains how a future paid add-on can exist without changing
+this edition: everything in this repository stays free and complete.
+
 ## Project layout
 
 ```

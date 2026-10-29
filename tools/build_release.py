@@ -68,8 +68,14 @@ def clean(path: Path):
         shutil.rmtree(path, ignore_errors=True)
 
 
-def build_app() -> Path:
-    """Freeze the studio into a single windowed executable."""
+def build_app(addons: tuple[Path, ...] = ()) -> Path:
+    """Freeze the studio into a single windowed executable.
+
+    ``addons`` is only used by the private build: each folder is a Python
+    package dropped into ``umbraforge/addons`` inside the frozen app. The
+    public build passes nothing, so an open-source release can never contain
+    paid code.
+    """
     clean(APP_DIR)
     clean(APP_WORK)
     clean(APP_SPEC)
@@ -85,8 +91,10 @@ def build_app() -> Path:
         "--distpath", str(APP_DIR),
         "--workpath", str(APP_WORK),
         "--specpath", str(APP_SPEC),
-        str(ROOT / "desktop.py"),
     ]
+    for addon in addons:
+        cmd += ["--add-data", f"{addon};umbraforge/addons/{addon.name}"]
+    cmd.append(str(ROOT / "desktop.py"))
     log("freezing the studio with PyInstaller...")
     subprocess.run(cmd, cwd=str(ROOT), check=True)
     produced = APP_DIR / f"{branding.APP_NAME}.exe"
@@ -201,7 +209,20 @@ def main(argv=None):
     parser.add_argument("--skip-app", action="store_true",
                         help="reuse build/app-dist/UmbraForge.exe")
     parser.add_argument("--no-clean", action="store_true")
+    parser.add_argument(
+        "--addon", action="append", default=[], metavar="DIR",
+        help="bundle a private add-on package; not used by open-source builds",
+    )
     args = parser.parse_args(argv)
+
+    addons: list[Path] = []
+    for item in args.addon:
+        path = Path(item).expanduser().resolve()
+        if not (path / "__init__.py").is_file():
+            raise SystemExit(f"add-on {path} is not a Python package")
+        addons.append(path)
+    if addons:
+        log(f"private build with {len(addons)} add-on(s)")
 
     BUILD.mkdir(parents=True, exist_ok=True)
     if not args.no_clean:
@@ -213,7 +234,7 @@ def main(argv=None):
         if not executable.exists():
             raise SystemExit(f"no frozen app at {executable}")
     else:
-        executable = build_app()
+        executable = build_app(tuple(addons))
 
     stage = STAGE_ROOT / STAGE_FOLDER
     stage_program(stage, executable)
