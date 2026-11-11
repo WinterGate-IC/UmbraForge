@@ -65,8 +65,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.1-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.1.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.2-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.2.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -256,7 +256,7 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.1",
+  "saved_with": "UmbraForge 0.1.2",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
@@ -350,20 +350,23 @@ umbraforge/
 
 ## Status
 
-Version 0.1.1 is the current Windows release. It ships as one timestamped
+Version 0.1.2 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
 
-What changed in 0.1.1:
+What changed in 0.1.2:
 
-- background preset cards now render real thumbnails and every visible preset
-  is brighter and contrastier instead of reading as a blank dark card;
-- the **Saves** menu, Start-tab resume button and recent-project list make it
-  easy to close the app and continue editing later;
-- flat image saves also write the paired editable `.umbra` project by default;
-- the release now bundles `LICENSE`.
+- the **Build** rail no longer clips: every section fits its panel at any
+  window size, shape and icon grids reflow to the rail width, and the rail
+  can be dragged wider;
+- **Add text** and **Edit text** are now first-class actions in the top bar,
+  the Edit menu, the empty-canvas menu and the Text section (`Ctrl+T` /
+  `F2`), and adding text opens the words field ready to type;
+- long names, paths and captions elide with a tooltip instead of pushing the
+  rail past its edge;
+- all seven Build sections stay reachable without overflow arrows.
 
 ---
 

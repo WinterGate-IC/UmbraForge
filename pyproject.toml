@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "umbraforge"
-version = "0.1.1"
+version = "0.1.2"
 description = "A dark layered image and emblem studio for profile pictures, wallpapers, posters and more."
 readme = "README.md"
 requires-python = ">=3.10"
