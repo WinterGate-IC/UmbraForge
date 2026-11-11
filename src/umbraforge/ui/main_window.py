@@ -130,6 +130,10 @@ class MainWindow(QMainWindow):
         self.act_delete = self._action("Delete layer", self._delete_layer,
                                        ["Delete"])
         self.act_lock = self._action("Lock layer", self._toggle_lock, ["Ctrl+L"])
+        self.act_add_text = self._action("Add text", self._add_text_default,
+                                         ["Ctrl+T"])
+        self.act_edit_text = self._action("Edit text", self._edit_selected_text,
+                                          ["F2"])
 
         self.act_forward = self._action("Bring forward", lambda: self._reorder(1),
                                         ["Ctrl+]"])
@@ -196,6 +200,9 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.act_duplicate)
         edit_menu.addAction(self.act_delete)
         edit_menu.addAction(self.act_lock)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.act_add_text)
+        edit_menu.addAction(self.act_edit_text)
 
         layer_menu = bar.addMenu("&Layer")
         layer_menu.addAction(self.act_forward)
@@ -401,6 +408,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._bar_button("New", self.act_new, "ghost"))
         layout.addWidget(self._bar_button("Open", self.act_open, "ghost"))
         layout.addWidget(self._bar_button("Import", self.act_import, "ghost"))
+        text = self._bar_button("Text", self.act_add_text, "ghost")
+        text.setToolTip("Add an editable text layer and start typing  (Ctrl+T)")
+        layout.addWidget(text)
         save = self._bar_button("Save", self.act_save, "primary")
         save.setMinimumWidth(92)
         save.setToolTip("Save an image or the editable project - one flow, "
@@ -1076,7 +1086,19 @@ class MainWindow(QMainWindow):
         design.add(layer)
         self._record("Add text", f"add-text-{layer.id}")
         self._refresh_all()
-        self._flash("Text added. Edit it in the inspector.")
+        self.inspector.focus_text()
+        self._flash("Text added. Type your words in the inspector.")
+
+    def _add_text_default(self) -> None:
+        """One-click text: a plain heading, ready to replace."""
+        self._add_text("heading")
+
+    def _edit_selected_text(self) -> None:
+        layer = self.design.active
+        if isinstance(layer, TextLayer):
+            self._edit_text(layer.id)
+        else:
+            self._flash("Select a text layer first, then press F2.")
 
     def _set_selected_font(self, family: str) -> None:
         layer = self.design.active
@@ -1267,6 +1289,7 @@ class MainWindow(QMainWindow):
                 menu.addAction("Remove background\u2026",
                                lambda: self._remove_background(layer.id))
         else:
+            menu.addAction("Add text", self.act_add_text)
             menu.addAction("New design\u2026", self._new)
             menu.addAction("Import image\u2026", self._import_image)
             menu.addAction("Fit to window", self._fit)
@@ -1297,6 +1320,7 @@ class MainWindow(QMainWindow):
         self.act_duplicate.setEnabled(has)
         self.act_delete.setEnabled(has)
         self.act_lock.setEnabled(has)
+        self.act_edit_text.setEnabled(isinstance(layer, TextLayer))
         self.act_lock.setText("Unlock layer" if has and layer.locked else "Lock layer")
         self.act_forward.setEnabled(has and index < len(self.design.layers) - 1)
         self.act_backward.setEnabled(has and index > 0)

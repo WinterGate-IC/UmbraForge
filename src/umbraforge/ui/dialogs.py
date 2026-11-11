@@ -1212,9 +1212,13 @@ code {{ color: #ffb066; }}
 <h2>Make something</h2>
 <p>Pick a <b>template</b> on the Start tab, or press <b>New design</b> to choose a
 canvas. Everything a template contains is a normal layer: nothing is flattened.</p>
-<p>Add shapes, icons and type from the <b>Build</b> rail. They are vector paths, so
-they stay sharp at any export size. Import a photo in the Images tab and it is
-embedded in the design file.</p>
+<p>Add text, shapes and icons from the <b>Build</b> rail. The <b>Text</b> tab has
+an <b>Add text</b> button and a shelf of starting styles; the same action is on
+the top bar, in the <b>Edit</b> menu and on the canvas right-click menu
+(<b>Ctrl+T</b>). Text layers stay editable: select one and type in the field at
+the top of the Layer panel, or press <b>F2</b> / double-click it on the canvas.
+Shapes and icons are vector paths, so they stay sharp at any export size. Import
+a photo in the Images tab and it is embedded in the design file.</p>
 
 <h2>Move things</h2>
 <ul>
@@ -1262,6 +1266,7 @@ work asks first.</p>
 <li><b>Ctrl+N</b> new &nbsp; <b>Ctrl+O</b> open &nbsp; <b>Ctrl+S</b> save &nbsp; <b>Ctrl+Shift+S</b> save as</li>
 <li><b>Ctrl+Z</b> undo &nbsp; <b>Ctrl+Shift+Z</b> redo</li>
 <li><b>Ctrl+D</b> duplicate layer &nbsp; <b>Del</b> delete layer &nbsp; <b>Ctrl+L</b> lock</li>
+<li><b>Ctrl+T</b> add text &nbsp; <b>F2</b> edit selected text</li>
 <li><b>Ctrl+I</b> import image &nbsp; <b>Ctrl+G</b> grid &nbsp; <b>F1</b> guide</li>
 </ul>
 """

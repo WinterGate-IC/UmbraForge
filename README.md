@@ -146,7 +146,9 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 2. Choose a canvas preset and either a blank sheet or a template.
 3. Add parts from the left rail: **Start** (templates, projects and blank),
    **Backgrounds** (12 ready-made presets with live previews), **Shapes**,
-   **Icons**, **Type**, **Fonts** and **Images**.
+   **Icons**, **Text**, **Fonts** and **Images**. The **Text** tab has an
+   **Add text** button (also on the top bar, in the **Edit** menu, and on the
+   canvas right-click menu); **Ctrl+T** works anywhere.
 4. Select a layer on the canvas or in the layer stack to edit it in the right
    rail: geometry, fill, effects, blend mode, text, image adjustments, masks
    and background removal.
@@ -172,7 +174,8 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 | Fit / actual size | **Ctrl+0** / **Ctrl+1** |
 | Grid | **Ctrl+G** |
 | Snap | Automatic to canvas centre and other layers, with guides |
-| Edit text | Double-click a text layer |
+| Add text | **Ctrl+T**, the **Text** button, **Edit > Add text**, or the empty-canvas right-click menu |
+| Edit text | **F2**, **Edit > Edit text**, the canvas right-click menu, or double-click a text layer |
 
 ### Shortcuts
 
@@ -184,6 +187,8 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 | **Ctrl+Alt+S** | Save an editable `.umbra` copy |
 | **Ctrl+I** | Import image |
 | **Ctrl+Shift+I** | Import layers from another project |
+| **Ctrl+T** | Add a text layer |
+| **F2** | Edit the selected text layer |
 | **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / Redo |
 | **Ctrl+D** | Duplicate layer |
 | **Delete** | Delete layer |

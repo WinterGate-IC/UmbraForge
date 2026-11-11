@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PIL import Image
+from PySide6.QtWidgets import QPushButton
 
 from umbraforge import branding, presets
 from umbraforge.layers import IconLayer, ShapeLayer, TextLayer
@@ -34,6 +35,65 @@ def test_add_shape_icon_and_text(window):
     assert isinstance(window.design.active, TextLayer)
     assert len(window.design.layers) == before + 3
     assert window.design.active.text
+    # Adding text opens the words field, ready to replace the sample.
+    assert window.inspector._text_editor is not None
+    assert window.inspector._text_editor.toPlainText() == window.design.active.text
+
+
+def test_text_is_discoverable_in_the_rail_and_menus(window):
+    panel = window.library_panel
+    labels = panel.section_labels()
+    assert "Text" in labels
+    assert "Type" not in labels
+
+    text_tab = panel.pages.widget(labels.index("Text"))
+    assert any(button.text() == "Add text"
+               for button in text_tab.findChildren(QPushButton))
+    # The rail, the top bar, the Edit menu and the empty-canvas menu all
+    # offer the same action, so it does not hide behind a tab overflow.
+    assert window.act_add_text.text() == "Add text"
+    assert window.act_add_text.shortcut().toString() == "Ctrl+T"
+    assert window.act_edit_text.text() == "Edit text"
+    assert window.act_edit_text.shortcut().toString() == "F2"
+
+
+def test_all_build_sections_are_visible_and_reversible(window):
+    panel = window.library_panel
+    labels = panel.section_labels()
+    assert labels == ["Start", "Backgrounds", "Shapes", "Icons", "Text",
+                      "Fonts", "Images"]
+    for index, label in enumerate(labels):
+        panel.show_section(index)
+        assert panel.current_section() == index
+        assert panel._section_buttons[index].isChecked()
+    # Going right and back left is a click, not an overflow arrow.
+    panel.show_section(labels.index("Text"))
+    panel.show_section(labels.index("Start"))
+    assert panel.current_section() == 0
+    assert panel._section_buttons[0].isChecked()
+
+
+def test_add_text_action_adds_a_focused_text_layer(window):
+    count = len(window.design.layers)
+    window.act_add_text.trigger()
+    layer = window.design.active
+    assert isinstance(layer, TextLayer)
+    assert len(window.design.layers) == count + 1
+    assert window.act_edit_text.isEnabled()
+    assert window.inspector._text_editor is not None
+    assert window.inspector._text_editor.toPlainText() == layer.text
+
+
+def test_edit_text_action_tracks_the_selection(window):
+    text_layer = next(layer for layer in window.design.layers
+                      if isinstance(layer, TextLayer))
+    window.design.selected = text_layer.id
+    window._sync_selection()
+    assert window.act_edit_text.isEnabled()
+
+    window._add_shape("circle")
+    window._sync_selection()
+    assert not window.act_edit_text.isEnabled()
 
 
 def test_undo_and_redo_round_trip(window):

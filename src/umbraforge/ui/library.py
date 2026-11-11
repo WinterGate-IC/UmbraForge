@@ -7,8 +7,10 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -17,7 +19,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QTabWidget,
+    QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -137,16 +140,44 @@ class LibraryPanel(QWidget):
         header.addWidget(version)
         layout.addLayout(header)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.tabs.addTab(self._start_tab(), "Start")
-        self.tabs.addTab(self._background_tab(), "Backgrounds")
-        self.tabs.addTab(self._shape_tab(), "Shapes")
-        self.tabs.addTab(self._icon_tab(), "Icons")
-        self.tabs.addTab(self._type_tab(), "Type")
-        self.tabs.addTab(self._font_tab(), "Fonts")
-        self.tabs.addTab(self._image_tab(), "Images")
-        layout.addWidget(self.tabs, 1)
+        self._section_group = QButtonGroup(self)
+        self._section_group.setExclusive(True)
+        self._section_buttons: list[QToolButton] = []
+        self.pages = QStackedWidget()
+        sections = (
+            ("Start", "Templates, projects and a blank canvas", self._start_tab),
+            ("Backgrounds", "Ready-made backgrounds", self._background_tab),
+            ("Shapes", "Vector shapes", self._shape_tab),
+            ("Icons", "SVG icons", self._icon_tab),
+            ("Text", "Add text and type styles", self._type_tab),
+            ("Fonts", "Installed fonts", self._font_tab),
+            ("Images", "Imported images", self._image_tab),
+        )
+        nav = QGridLayout()
+        nav.setContentsMargins(0, 0, 0, 0)
+        nav.setHorizontalSpacing(4)
+        nav.setVerticalSpacing(4)
+        for index, (label, tip, factory) in enumerate(sections):
+            self.pages.addWidget(factory())
+            button = QToolButton()
+            button.setText(label)
+            button.setToolTip(tip)
+            button.setCheckable(True)
+            button.setObjectName("railTab")
+            button.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                 QSizePolicy.Policy.Fixed)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(
+                lambda _checked=False, i=index: self.show_section(i))
+            self._section_group.addButton(button, index)
+            nav.addWidget(button, index // 3, index % 3)
+            self._section_buttons.append(button)
+        # A fixed three-column grid keeps every section visible. The old
+        # single-row tab strip hid Text, Fonts and Images behind arrows at
+        # the default rail width, and the arrows were easy to lose.
+        layout.addLayout(nav)
+        layout.addWidget(self.pages, 1)
+        self.show_section(0)
 
         self._template_timer = QTimer(self)
         self._template_timer.setSingleShot(True)
@@ -165,7 +196,23 @@ class LibraryPanel(QWidget):
         self._bg_thumb_timer.timeout.connect(self._render_next_bg_thumb)
         self.refresh_assets()
 
-    # ---------------------------------------------------------------- tabs
+    # --------------------------------------------------------------- sections
+    def show_section(self, index: int) -> None:
+        """Switch the Build rail to one section, with no hidden overflow."""
+        if not self._section_buttons:
+            return
+        index = max(0, min(index, self.pages.count() - 1))
+        self.pages.setCurrentIndex(index)
+        button = self._section_group.button(index)
+        if button is not None:
+            button.setChecked(True)
+
+    def current_section(self) -> int:
+        return self.pages.currentIndex()
+
+    def section_labels(self) -> list[str]:
+        return [button.text() for button in self._section_buttons]
+
     def _scroll(self) -> tuple[QScrollArea, QWidget, QVBoxLayout]:
         area = QScrollArea()
         area.setWidgetResizable(True)
@@ -208,7 +255,7 @@ class LibraryPanel(QWidget):
             "Pick a ready-made background to build on. You can still make it "
             "completely invisible later from the Canvas tab.", True))
         quick_bg = QPushButton("Browse backgrounds\u2026")
-        quick_bg.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
+        quick_bg.clicked.connect(lambda: self.show_section(1))
         layout.addWidget(quick_bg)
         layout.addSpacing(4)
 
@@ -473,9 +520,14 @@ class LibraryPanel(QWidget):
 
     def _type_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
-        layout.addWidget(muted("Click a type style, then edit the words in the "
-                               "Layer panel. Every style is a starting point, "
-                               "not a lock.", True))
+        add = QPushButton("Add text")
+        add.setObjectName("primary")
+        add.setToolTip("Add an editable text layer and start typing  (Ctrl+T)")
+        add.clicked.connect(lambda: self.addText.emit("heading"))
+        layout.addWidget(add)
+        layout.addWidget(muted("Or pick a style below. Every style is a "
+                               "starting point, not a lock; edit the words in "
+                               "the Layer panel.", True))
         for style in text_styles.STYLES:
             card = Card()
             card.setFixedHeight(58)

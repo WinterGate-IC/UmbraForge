@@ -186,11 +186,17 @@ class Inspector(QWidget):
     def _build_layer_tab(self) -> None:
         self._layer_scroll_value = self.layer_scroll.verticalScrollBar().value()
         _clear(self.layer_layout)
+        self._text_editor = None
         layer = self.design().active
         if layer is None:
             self._empty_layer_tab()
             return
         self._layer_header(layer)
+        # Text is the reason most people open this tab. Keep the words
+        # directly under the layer name, above geometry and effects, so
+        # adding or selecting a text layer shows an editable field at once.
+        if isinstance(layer, TextLayer):
+            self._text_section(layer)
         self._transform_section(layer)
         self._appearance_section(layer)
         self._effects_section(layer)
@@ -198,8 +204,6 @@ class Inspector(QWidget):
             self._shape_section(layer)
         elif isinstance(layer, IconLayer):
             self._icon_section(layer)
-        elif isinstance(layer, TextLayer):
-            self._text_section(layer)
         elif isinstance(layer, ImageLayer):
             self._image_section(layer)
         self.layer_layout.addStretch(1)
@@ -614,7 +618,10 @@ class Inspector(QWidget):
     def focus_text(self) -> None:
         editor = getattr(self, "_text_editor", None)
         if editor is not None:
-            editor.setFocus()
+            # The Layer tab scrolls. Bring the words into view instead of
+            # leaving the caret below the fold after a text layer is added.
+            self.layer_scroll.ensureWidgetVisible(editor)
+            editor.setFocus(Qt.FocusReason.OtherFocusReason)
             editor.selectAll()
 
     # --------------------------------------------------------------- image
