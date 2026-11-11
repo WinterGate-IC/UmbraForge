@@ -96,6 +96,49 @@ def test_edit_text_action_tracks_the_selection(window):
     assert not window.act_edit_text.isEnabled()
 
 
+def test_build_rail_never_clips_its_contents(window):
+    """Every Build section must fit the rail: no sideways scroll, no cut-off."""
+    from PySide6.QtWidgets import QApplication, QScrollArea, QWidget
+
+    window.resize(1080, 700)
+    window.show()
+    QApplication.processEvents()
+    panel = window.library_panel
+    for index, label in enumerate(panel.section_labels()):
+        panel.show_section(index)
+        QApplication.processEvents()
+        page = panel.pages.widget(index)
+        area = (page if isinstance(page, QScrollArea)
+                else page.findChild(QScrollArea))
+        assert area is not None, label
+        assert area.horizontalScrollBar().maximum() == 0, label
+        body = area.widget()
+        assert body.width() <= area.viewport().width() + 1, label
+        for child in body.findChildren(QWidget):
+            if not child.isVisible():
+                continue
+            right = child.mapTo(body, child.rect().topLeft()).x() + child.width()
+            assert right <= body.width() + 1, (
+                f"{label}: {child.__class__.__name__} sticks out")
+
+
+def test_icon_grids_reflow_to_the_rail_width(window):
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    window.resize(1080, 700)
+    window.show()
+    panel = window.library_panel
+    panel.show_section(panel.section_labels().index("Shapes"))
+    QApplication.processEvents()
+    grids = [widget for widget in panel.pages.widget(2).findChildren(QWidget)
+             if widget.__class__.__name__ == "IconGrid"]
+    assert grids
+    for grid in grids:
+        assert grid.columns() * grid.CELL + (grid.columns() - 1) * grid.GAP \
+            <= grid.width()
+        assert grid.columns() >= 4
+
+
 def test_undo_and_redo_round_trip(window):
     before = len(window.design.layers)
     window._add_shape("star")

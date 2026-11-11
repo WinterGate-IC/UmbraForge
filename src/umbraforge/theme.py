@@ -154,7 +154,15 @@ QToolButton:hover {{ background: {RAISED}; color: {TEXT}; }}
 QToolButton:pressed {{ background: {ACCENT_SOFT}; color: {ACCENT}; }}
 QToolButton:checked {{ background: {ACCENT_SOFT}; color: {ACCENT}; }}
 QToolButton#railTab {{
-    padding: 8px 6px; font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    background: {PANEL_ALT}; color: {TEXT_MUTED}; border: 1px solid {BORDER};
+    border-radius: 6px; padding: 6px 4px; font-size: 10px;
+    font-weight: 700; letter-spacing: .4px;
+}}
+QToolButton#railTab:hover {{
+    background: {RAISED}; color: {TEXT}; border-color: {BORDER_HOVER};
+}}
+QToolButton#railTab:checked {{
+    background: {ACCENT_SOFT}; color: {ACCENT}; border-color: {ACCENT_DIM};
 }}
 
 QTabWidget::pane {{

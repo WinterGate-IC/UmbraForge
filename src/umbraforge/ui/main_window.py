@@ -300,7 +300,7 @@ class MainWindow(QMainWindow):
         self.library_panel = LibraryPanel(lambda: self.design)
         left_layout.addWidget(self.library_panel)
         left.setMinimumWidth(300)
-        left.setMaximumWidth(400)
+        left.setMaximumWidth(480)
         splitter.addWidget(left)
 
         centre = QWidget()
@@ -342,7 +342,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 0)
-        splitter.setSizes([318, 800, 360])
+        splitter.setSizes([340, 780, 360])
         outer.addWidget(splitter, 1)
         self.setCentralWidget(central)
 

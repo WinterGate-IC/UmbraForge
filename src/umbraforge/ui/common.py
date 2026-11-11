@@ -6,6 +6,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QIcon,
     QPainter,
     QPainterPath,
@@ -56,6 +57,58 @@ def rule() -> QFrame:
     line.setFixedHeight(1)
     line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     return line
+
+
+class ElidedLabel(QLabel):
+    """A one-line label that shortens itself instead of widening the rail.
+
+    The Build rail is only a few hundred pixels wide, but project paths,
+    template notes and image names can be far longer. A plain ``QLabel``
+    reports its full width as a *minimum*, which forced the whole panel
+    wider than its viewport so the right-hand side was clipped away. This
+    label reports a zero minimum, paints an ellipsis and keeps the full
+    value in its tooltip.
+    """
+
+    def __init__(self, text: str = "",
+                 mode: Qt.TextElideMode = Qt.TextElideMode.ElideRight,
+                 parent: QWidget | None = None):
+        super().__init__(parent)
+        self._full_text = ""
+        self._mode = mode
+        self.setSizePolicy(QSizePolicy.Policy.Ignored,
+                           QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(0)
+        self.setText(text)
+
+    def setText(self, text: str) -> None:  # noqa: N802 (Qt naming)
+        self._full_text = text or ""
+        super().setText(self._full_text)
+        self.setToolTip(self._full_text)
+        self._elide()
+
+    def text(self) -> str:  # noqa: N802 (Qt naming)
+        return self._full_text
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        hint = super().sizeHint()
+        return QSize(min(hint.width(), 120), hint.height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        return QSize(0, super().minimumSizeHint().height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self) -> None:
+        available = self.width() - 2
+        if available <= 8:
+            return
+        metrics = QFontMetrics(self.font())
+        shown = metrics.elidedText(self._full_text, self._mode, available)
+        if shown != super().text():
+            super().setText(shown)
 
 
 class ColorButton(QPushButton):
@@ -279,9 +332,12 @@ def draw_layer_icon(kind: str, size: int = 26, color: str = theme.TEXT_MUTED) ->
 
 
 class IconGrid(QWidget):
-    """A grid of square icon buttons."""
+    """A grid of square icon buttons that reflows to fit the rail."""
 
     chosen = Signal(str)
+
+    CELL = 42
+    GAP = 6
 
     def __init__(self, entries: list[tuple[str, str]], kind: str = "shape",
                  columns: int = 6, icon_size: int = 28,
@@ -289,12 +345,15 @@ class IconGrid(QWidget):
         super().__init__(parent)
         from PySide6.QtWidgets import QGridLayout
 
-        grid = QGridLayout(self)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(6)
+        self._preferred_columns = max(1, int(columns))
+        self._columns = self._preferred_columns
+        self._buttons: list[QToolButton] = []
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(self.GAP)
         for index, (key, label) in enumerate(entries):
             button = QToolButton()
-            button.setFixedSize(42, 42)
+            button.setFixedSize(self.CELL, self.CELL)
             button.setToolTip(label)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setIcon(draw_shape_icon(key, icon_size) if kind == "shape"
@@ -306,8 +365,44 @@ class IconGrid(QWidget):
                 f"QToolButton:hover {{ border-color: {theme.ACCENT}; "
                 f"background: {theme.RAISED}; }}")
             button.clicked.connect(lambda _=False, k=key: self.chosen.emit(k))
-            grid.addWidget(button, index // columns, index % columns)
-        grid.setColumnStretch(columns, 1)
+            self._grid.addWidget(button, index // self._columns,
+                                 index % self._columns)
+            self._buttons.append(button)
+        self._grid.setColumnStretch(self._columns, 1)
+        # The layout width must never dictate the rail width: report no
+        # minimum so the scroll body can stay inside its viewport, then
+        # pick however many columns actually fit.
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,
+                           QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        return QSize(0, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        return QSize(0, super().minimumSizeHint().height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._reflow()
+
+    def columns(self) -> int:
+        return self._columns
+
+    def _reflow(self) -> None:
+        if not self._buttons:
+            return
+        width = max(self.CELL, self.width())
+        fitted = (width + self.GAP) // (self.CELL + self.GAP)
+        columns = max(1, min(int(fitted), len(self._buttons)))
+        if columns == self._columns:
+            return
+        self._columns = columns
+        for index, button in enumerate(self._buttons):
+            self._grid.addWidget(button, index // columns, index % columns)
+        for column in range(self._preferred_columns + 1):
+            self._grid.setColumnStretch(column, 0)
+        self._grid.setColumnStretch(columns, 1)
+        self.updateGeometry()
 
 
 def _icon_icon(kind: str, size: int = 28,

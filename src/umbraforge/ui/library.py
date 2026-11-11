@@ -27,13 +27,24 @@ from PySide6.QtWidgets import (
 
 from .. import backgrounds, branding, cutout, fonts, geometry, renderer, templates, text_styles, theme
 from ..layers import Design, asset_name, asset_bytes
-from .common import Card, IconGrid, caption, hint, muted, preview_pixmap, rule
+from .common import (
+    Card,
+    ElidedLabel,
+    IconGrid,
+    caption,
+    hint,
+    muted,
+    preview_pixmap,
+    rule,
+)
 
 
 class TemplateCard(Card):
     def __init__(self, template, parent: QWidget | None = None):
         super().__init__(parent)
         self.template = template
+        self._thumbnail = QPixmap()
+        self._thumb_ready = False
         self.setFixedHeight(210)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QVBoxLayout(self)
@@ -42,13 +53,19 @@ class TemplateCard(Card):
         self.image = QLabel("Rendering\u2026")
         self.image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image.setFixedHeight(154)
+        self.image.setMinimumWidth(0)
+        self.image.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                 QSizePolicy.Policy.Fixed)
         self.image.setStyleSheet(
             f"background: {theme.FIELD}; border-radius: 7px; color: {theme.TEXT_DISABLED};")
-        self.title = QLabel(template.name)
+        self.title = ElidedLabel(template.name)
         self.title.setObjectName("heading")
         self.note = QLabel(template.note)
         self.note.setObjectName("dim")
         self.note.setWordWrap(True)
+        self.note.setMinimumWidth(0)
+        self.note.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                QSizePolicy.Policy.Preferred)
         self.note.setFixedHeight(30)
         for widget in (self.image, self.title, self.note):
             widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -56,13 +73,24 @@ class TemplateCard(Card):
         self.setToolTip(f"{template.name}\n{template.note}")
 
     def set_thumbnail(self, pixmap: QPixmap) -> None:
-        if pixmap.isNull():
-            self.image.setText("No preview")
+        self._thumbnail = pixmap or QPixmap()
+        self._thumb_ready = True
+        self._paint_thumbnail()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._paint_thumbnail()
+
+    def _paint_thumbnail(self) -> None:
+        if self._thumbnail.isNull():
+            self.image.setText("No preview" if self._thumb_ready
+                               else "Rendering\u2026")
             return
-        scaled = pixmap.scaled(268, 154, Qt.AspectRatioMode.KeepAspectRatio,
-                               Qt.TransformationMode.SmoothTransformation)
+        width = max(80, self.image.width())
+        self.image.setPixmap(self._thumbnail.scaled(
+            width, 154, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation))
         self.image.setText("")
-        self.image.setPixmap(scaled)
 
 
 class BackgroundCard(Card):
@@ -83,11 +111,14 @@ class BackgroundCard(Card):
         layout.addWidget(self.swatch)
         text_box = QVBoxLayout()
         text_box.setSpacing(1)
-        self.title = QLabel(preset.name)
+        self.title = ElidedLabel(preset.name)
         self.title.setObjectName("heading")
         self.note = QLabel(preset.note)
         self.note.setObjectName("dim")
         self.note.setWordWrap(True)
+        self.note.setMinimumWidth(0)
+        self.note.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                QSizePolicy.Policy.Preferred)
         text_box.addWidget(self.title)
         text_box.addWidget(self.note)
         layout.addLayout(text_box, 1)
@@ -227,18 +258,16 @@ class LibraryPanel(QWidget):
     def _start_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
         layout.addWidget(muted("Start from a design, then make it yours.", True))
-        start_row = QHBoxLayout()
         blank = QPushButton("Blank canvas")
         blank.setObjectName("primary")
         blank.setToolTip("Start with an empty canvas using the current size")
         blank.clicked.connect(self.newBlank.emit)
+        layout.addWidget(blank)
         open_project = QPushButton("Open project\u2026")
         open_project.setToolTip(
             "Open an .umbra project and keep editing every layer and image")
         open_project.clicked.connect(self.openProject.emit)
-        start_row.addWidget(blank, 1)
-        start_row.addWidget(open_project, 1)
-        layout.addLayout(start_row)
+        layout.addWidget(open_project)
 
         self._resume_target: Path | None = None
         self._resume_button = QPushButton("Continue where you left off")
@@ -350,8 +379,10 @@ class LibraryPanel(QWidget):
             self._resume_target = self._recent_paths[0] if self._recent_paths else None
             self._resume_button.setVisible(bool(self._recent_paths))
             if self._recent_paths:
-                self._resume_button.setText(
-                    f"Continue \u201c{self._recent_paths[0].stem}\u201d")
+                # Keep the label short enough for the narrowest rail; the
+                # project name and full path live in the tooltip and in the
+                # "Continue editing" list underneath.
+                self._resume_button.setText("Continue")
                 self._resume_button.setToolTip(
                     f"{self._recent_paths[0]}\nOpen this editable project and "
                     "pick up where you left off.")
@@ -377,9 +408,11 @@ class LibraryPanel(QWidget):
             row.addWidget(mark)
             text_box = QVBoxLayout()
             text_box.setSpacing(1)
-            title = QLabel(path.stem or path.name)
+            title = ElidedLabel(path.stem or path.name)
             title.setObjectName("heading")
-            detail = QLabel(f"Project  \u00b7  {path.parent}")
+            title.setToolTip(path.name)
+            detail = ElidedLabel(f"Project  \u00b7  {path.parent}",
+                                 Qt.TextElideMode.ElideMiddle)
             detail.setObjectName("hint")
             detail.setToolTip(str(path))
             text_box.addWidget(title)
@@ -534,7 +567,7 @@ class LibraryPanel(QWidget):
             card.clicked.connect(lambda k=style.key: self.addText.emit(k))
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 6, 12, 6)
-            sample = QLabel(style.sample)
+            sample = ElidedLabel(style.sample)
             font = QFont(style.font)
             font.setPixelSize(style.sample_px)
             font.setWeight(QFont.Weight.Bold if style.weight >= 700
@@ -544,16 +577,19 @@ class LibraryPanel(QWidget):
                                   style.spacing * style.sample_px)
             sample.setFont(font)
             sample.setStyleSheet(f"color: {theme.TEXT};")
-            sample.setToolTip(f"Starts in {style.font}")
+            sample.setToolTip(f"{style.sample} \u2014 starts in {style.font}")
             row.addWidget(sample, 1)
             side = QVBoxLayout()
             side.setSpacing(0)
-            name = QLabel(style.label)
+            name = ElidedLabel(style.label, Qt.TextElideMode.ElideLeft)
             name.setObjectName("dim")
-            note = QLabel(style.hint)
-            note.setObjectName("hint")
+            name.setMinimumWidth(84)
+            name.setAlignment(Qt.AlignmentFlag.AlignRight
+                              | Qt.AlignmentFlag.AlignVCenter)
+            name.setToolTip(f"{style.label} \u2014 {style.hint}")
+            side.addStretch(1)
             side.addWidget(name)
-            side.addWidget(note)
+            side.addStretch(1)
             row.addLayout(side)
             layout.addWidget(card)
         layout.addStretch(1)
@@ -577,13 +613,17 @@ class LibraryPanel(QWidget):
         layout.addWidget(self._font_category)
         self._font_list = QListWidget()
         self._font_list.setUniformItemSizes(True)
+        self._font_list.setMinimumWidth(0)
+        self._font_list.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                      QSizePolicy.Policy.Expanding)
+        self._font_list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self._font_list.setMinimumHeight(360)
         self._font_list.setStyleSheet(
             f"QListWidget {{ background: {theme.FIELD}; border-radius: 6px; }}"
             "QListWidget::item { padding: 3px 6px; }")
         self._font_list.itemClicked.connect(self._pick_font)
         layout.addWidget(self._font_list, 1)
-        self._font_count = QLabel("")
+        self._font_count = ElidedLabel("")
         self._font_count.setObjectName("hint")
         layout.addWidget(self._font_count)
         self._refresh_font_list()
@@ -706,7 +746,8 @@ class LibraryPanel(QWidget):
             layout.addWidget(thumb)
             text_box = QVBoxLayout()
             text_box.setSpacing(1)
-            name = QLabel(str(record.get("name") or "image"))
+            name = ElidedLabel(str(record.get("name") or "image"),
+                               Qt.TextElideMode.ElideMiddle)
             name.setStyleSheet("font-size: 11px;")
             name.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             size_info = QLabel(f"{record.get('w', 0)} \u00d7 {record.get('h', 0)}")
