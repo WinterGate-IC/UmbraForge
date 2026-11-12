@@ -70,6 +70,11 @@ or cleared at any time:
 
 ![An emblem with the Synthwave recipe applied](docs/images/effects-applied.png)
 
+Before and after - plain layers on the left, Synthwave + Neon edge + hairline
+outline on the right:
+
+![Before and after](docs/images/effects-before-after.png)
+
 The whole library at a glance:
 
 ![76 effect previews](docs/images/effects-library.png)
