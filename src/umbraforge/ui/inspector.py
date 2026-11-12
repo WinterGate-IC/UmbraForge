@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import fonts, geometry, imaging, layers, presets, theme
+from .. import effects, fonts, geometry, imaging, layers, presets, theme
 from ..layers import (
     ALIGNMENTS,
     BLEND_MODES,
@@ -351,6 +351,20 @@ class Inspector(QWidget):
 
     def _effects_section(self, layer: layers.Layer) -> None:
         self._section(self.layer_layout, "Effects")
+        style_items = [("", "No effects / custom")] + [
+            (preset.key, preset.label) for preset in effects.PRESETS
+        ]
+        style = self._combo(style_items, str(layer.effects.get("preset") or ""),
+                            self._pick_effect)
+        self._labeled(self.layer_layout, "Style", style)
+        self.layer_layout.addWidget(hint(
+            "The Build > Effects shelf has "
+            f"{len(effects.PRESETS)} ready-made recipes with previews. Pick "
+            "one here too, then adjust glow and drop shadow below."))
+        active = effects.active_names(layer.effects)
+        if active:
+            self.layer_layout.addWidget(muted(
+                "Active: " + ", ".join(active), True))
         shadow = layer.effects.setdefault("shadow", {})
         glow = layer.effects.setdefault("glow", {})
 
@@ -429,6 +443,28 @@ class Inspector(QWidget):
         shadow_box.setEnabled(shadow_on.isChecked())
         shadow_on.toggled.connect(shadow_box.setEnabled)
         self.layer_layout.addWidget(shadow_box)
+
+    def _pick_effect(self, key: str) -> None:
+        if self._loading:
+            return
+        layer = self.design().active
+        if layer is None:
+            return
+        if key:
+            preset = effects.get(key)
+            if preset is None:
+                return
+            layer.effects = effects.stack_for(key)
+            label = f"Effect: {preset.label}"
+            token = f"effect-{layer.id}-{key}"
+        else:
+            layer.effects = effects.default_stack()
+            label = "Clear effects"
+            token = f"clear-effects-{layer.id}"
+        self.changed.emit(label, token)
+        # Rebuilding the tab deletes the combo that is emitting this signal,
+        # so wait until the event loop is back in control.
+        QTimer.singleShot(0, self.refresh)
 
     # ----------------------------------------------------------- shape/icon
     def _fill_controls(self, layer, layout, color_attr: str = "fill") -> None:

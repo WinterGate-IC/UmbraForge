@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 from .. import (
     backgrounds,
     branding,
+    effects,
     extensions,
     fonts,
     geometry,
@@ -89,6 +91,7 @@ class MainWindow(QMainWindow):
         self.history = History(self.design)
         self._dirty = False
         self._restoring = False
+        self._style_clipboard: dict | None = None
         self.setAcceptDrops(True)
 
         self.setWindowTitle(branding.APP_NAME)
@@ -148,6 +151,10 @@ class MainWindow(QMainWindow):
                                        ["Ctrl+Shift+C"])
         self.act_flip_h = self._action("Flip horizontally", self._flip_h)
         self.act_flip_v = self._action("Flip vertically", self._flip_v)
+        self.act_copy_style = self._action("Copy layer style", self._copy_style,
+                                           ["Ctrl+Alt+C"])
+        self.act_paste_style = self._action("Paste layer style",
+                                            self._paste_style, ["Ctrl+Alt+V"])
         self.act_clear = self._action("Remove all layers", self._clear_layers)
 
         self.act_zoom_in = self._action("Zoom in", self._zoom_in,
@@ -213,6 +220,9 @@ class MainWindow(QMainWindow):
         layer_menu.addAction(self.act_centre)
         layer_menu.addAction(self.act_flip_h)
         layer_menu.addAction(self.act_flip_v)
+        layer_menu.addSeparator()
+        layer_menu.addAction(self.act_copy_style)
+        layer_menu.addAction(self.act_paste_style)
         layer_menu.addSeparator()
         layer_menu.addAction(self.act_clear)
 
@@ -537,6 +547,10 @@ class MainWindow(QMainWindow):
         self.library_panel.addAsset.connect(self._add_asset)
         self.library_panel.importImage.connect(self._import_image)
         self.library_panel.fontChosen.connect(self._set_selected_font)
+        self.library_panel.applyEffect.connect(self._apply_effect)
+        self.library_panel.clearEffects.connect(self._clear_effects)
+        self.library_panel.copyStyle.connect(self._copy_style)
+        self.library_panel.pasteStyle.connect(self._paste_style)
         self.act_grid.toggled.connect(self.canvas_set_grid)
 
     # ------------------------------------------------------------- documents
@@ -1113,6 +1127,58 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         self._flash(f"Font set to {resolved}.")
 
+    # -------------------------------------------------------------- effects
+    def _apply_effect(self, key: str) -> None:
+        layer = self.design.active
+        preset = effects.get(key)
+        if preset is None:
+            return
+        if layer is None:
+            self._flash("Select a layer first, then choose an effect.")
+            return
+        layer.effects = effects.stack_for(key)
+        self._record(f"Effect: {preset.label}",
+                     f"effect-{layer.id}-{key}")
+        self._refresh_all()
+        self._flash(f"{preset.label} applied \u00b7 tune it in the inspector.")
+
+    def _clear_effects(self) -> None:
+        layer = self.design.active
+        if layer is None:
+            self._flash("Select a layer first.")
+            return
+        if not effects.any_enabled(layer.effects):
+            self._flash("That layer has no effects.")
+            return
+        layer.effects = effects.default_stack()
+        self._record("Clear effects", f"clear-effects-{layer.id}")
+        self._refresh_all()
+        self._flash("Effects cleared.")
+
+    def _copy_style(self) -> None:
+        layer = self.design.active
+        if layer is None:
+            self._flash("Select a layer first.")
+            return
+        self._style_clipboard = copy.deepcopy(layer.effects)
+        self._update_actions()
+        active = effects.active_names(layer.effects)
+        summary = ", ".join(active) if active else "no effects"
+        self._flash(f"Copied {layer.name}'s style ({summary}).")
+
+    def _paste_style(self) -> None:
+        layer = self.design.active
+        if layer is None:
+            self._flash("Select a layer first.")
+            return
+        if self._style_clipboard is None:
+            self._flash("Copy a layer style first.")
+            return
+        layer.effects = copy.deepcopy(self._style_clipboard)
+        self._record("Paste layer style", f"paste-style-{layer.id}")
+        self._refresh_all()
+        self._flash(f"Style pasted onto {layer.name}.")
+
     def _add_asset(self, asset_id: str) -> None:
         design = self.design
         record = design.assets.get(asset_id)
@@ -1329,6 +1395,9 @@ class MainWindow(QMainWindow):
         self.act_centre.setEnabled(has)
         self.act_flip_h.setEnabled(has)
         self.act_flip_v.setEnabled(has)
+        self.act_copy_style.setEnabled(has)
+        self.act_paste_style.setEnabled(
+            has and self._style_clipboard is not None)
         self.act_clear.setEnabled(bool(self.design.layers))
         self.act_save.setEnabled(True)
         self.act_save_as.setEnabled(True)

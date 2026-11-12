@@ -41,6 +41,13 @@ logos. Forks are welcome but must use their own name - see
     `rembg` is installed.
 - **Image editing** with a non-destructive adjustment stack, fit modes and
   shape masks.
+- **A 76-recipe effects library** across Light, Shadow, Outline, Colour,
+  Texture, Distortion and Retro, built on 27 tunable primitives (glow, bloom,
+  god rays, long shadow, outline, blur, pixelate, duotone, gradient map,
+  halftone, dither, edge sketch, hue shift, chromatic split, glitch, scanlines,
+  grain and more). Each recipe has a rendered preview, effects live in a layer
+  stack and are never baked in until you export, and **Copy**/**Paste** carries
+  a tuned style from one layer to another.
 - **One Save flow** for PNG, JPEG, WebP, BMP, TIFF, Windows `.ico`, macOS
   `.icns`, a complete web-icon kit and the editable project. PNG is the default;
   sizes and compression adapt to the machine's safe memory budget.
@@ -50,6 +57,22 @@ logos. Forks are welcome but must use their own name - see
 - **Snapshot undo/redo** that treats a slider drag as one step, not fifty.
 - Dark theme throughout, with a drawn app mark (no external icon files
   required).
+
+## See it
+
+The Effects shelf, with search, categories and a rendered preview for every
+recipe:
+
+![The Effects shelf in the Build rail](docs/images/effects-shelf.png)
+
+Recipes are non-destructive and can be swapped, tuned, copied to other layers
+or cleared at any time:
+
+![An emblem with the Synthwave recipe applied](docs/images/effects-applied.png)
+
+The whole library at a glance:
+
+![76 effect previews](docs/images/effects-library.png)
 
 ## Requirements
 
@@ -65,8 +88,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.2-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.2.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.3-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.3.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -196,6 +219,7 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 | **Ctrl+[** / **Ctrl+]** | Send backward / bring forward |
 | **Ctrl+Shift+[** / **Ctrl+Shift+]** | Send to back / bring to front |
 | **Ctrl+Shift+C** | Centre layer |
+| **Ctrl+Alt+C** / **Ctrl+Alt+V** | Copy / paste a layer's effect style |
 | **F1** | Quick guide |
 
 ## Background removal notes
@@ -256,7 +280,7 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.2",
+  "saved_with": "UmbraForge 0.1.3",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
@@ -340,6 +364,7 @@ umbraforge/
 │  ├─ fonts.py             installed-font discovery and the font shelf
 │  ├─ text_styles.py       named type recipes
 │  ├─ imaging.py           Pillow/NumPy helpers and Qt bridges
+│  ├─ effects.py           the effect primitives, presets and compositor
 │  ├─ cutout.py            offline + optional AI background removal
 │  ├─ quality.py           adaptive export, icons and web-icon kits
 │  ├─ renderer.py          QPainter render pipeline
@@ -350,11 +375,26 @@ umbraforge/
 
 ## Status
 
-Version 0.1.2 is the current Windows release. It ships as one timestamped
+Version 0.1.3 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
+
+What changed in 0.1.3:
+
+- a new **Effects** section in the Build rail with search, seven categories,
+  rendered previews for all 76 recipes and **Copy** / **Paste** / **Clear**
+  style actions;
+- the effects engine grew to 27 primitives, adding god rays, gradient maps,
+  ordered dithering, hue rotation and edge-detected sketching;
+- the inspector's Effects section gained a **Style** picker for the same
+  recipes, shows which primitives are active, and keeps the glow and
+  drop-shadow controls for hand tuning;
+- layer styles can be copied and pasted between layers (`Ctrl+Alt+C` /
+  `Ctrl+Alt+V`), and every change is one undo step;
+- the renderer composites the whole effect stack, and old `.umbra` files keep
+  loading because saved stacks merge against the new defaults.
 
 What changed in 0.1.2:
 

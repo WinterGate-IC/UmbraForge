@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import backgrounds, branding, cutout, fonts, geometry, renderer, templates, text_styles, theme
+from .. import (backgrounds, branding, cutout, effects, fonts, geometry,
+                renderer, templates, text_styles, theme)
 from ..layers import Design, asset_name, asset_bytes
 from .common import (
     Card,
@@ -148,6 +149,10 @@ class LibraryPanel(QWidget):
     addAsset = Signal(str)
     importImage = Signal()
     fontChosen = Signal(str)
+    applyEffect = Signal(str)
+    clearEffects = Signal()
+    copyStyle = Signal()
+    pasteStyle = Signal()
 
     def __init__(self, design_getter, parent: QWidget | None = None):
         super().__init__(parent)
@@ -180,6 +185,7 @@ class LibraryPanel(QWidget):
             ("Backgrounds", "Ready-made backgrounds", self._background_tab),
             ("Shapes", "Vector shapes", self._shape_tab),
             ("Icons", "SVG icons", self._icon_tab),
+            ("Effects", "Finishes, glows and texture", self._effect_tab),
             ("Text", "Add text and type styles", self._type_tab),
             ("Fonts", "Installed fonts", self._font_tab),
             ("Images", "Imported images", self._image_tab),
@@ -550,6 +556,112 @@ class LibraryPanel(QWidget):
             self._icon_grids.append((None, grid))
             hint_w = hint("Tip: put an icon inside a ring or shield for a crest.")
             layout.insertWidget(layout.count() - 1, hint_w)
+
+    def _effect_tab(self) -> QWidget:
+        area, _body, layout = self._scroll()
+        layout.addWidget(muted(
+            "Pick a finish for the selected layer. Effects are "
+            "non-destructive: nothing is baked in until you export.", True))
+        buttons = QHBoxLayout()
+        buttons.setSpacing(6)
+        copy_button = QPushButton("Copy")
+        copy_button.setObjectName("chip")
+        copy_button.setToolTip("Copy the selected layer's effect style")
+        copy_button.clicked.connect(self.copyStyle.emit)
+        buttons.addWidget(copy_button)
+        paste_button = QPushButton("Paste")
+        paste_button.setObjectName("chip")
+        paste_button.setToolTip("Paste the copied style onto the selected layer")
+        paste_button.clicked.connect(self.pasteStyle.emit)
+        buttons.addWidget(paste_button)
+        clear = QPushButton("Clear")
+        clear.setObjectName("chip")
+        clear.setToolTip("Remove every effect from the selected layer")
+        clear.clicked.connect(self.clearEffects.emit)
+        buttons.addWidget(clear)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+        self._effect_search = QLineEdit()
+        self._effect_search.setPlaceholderText("Search effects\u2026")
+        self._effect_search.setClearButtonEnabled(True)
+        self._effect_search.textChanged.connect(self._refresh_effect_list)
+        layout.addWidget(self._effect_search)
+        self._effect_category = QComboBox()
+        self._effect_category.addItem("All effects")
+        self._effect_category.addItems(effects.categories())
+        self._effect_category.currentTextChanged.connect(
+            lambda _text: self._refresh_effect_list())
+        layout.addWidget(self._effect_category)
+        self._effect_cards: list[QWidget] = []
+        self._effect_layout = layout
+        self._effect_hint = hint("Every recipe can be tuned further in the "
+                                 "inspector's Effects section.")
+        layout.addWidget(self._effect_hint)
+        layout.addStretch(1)
+        self._refresh_effect_list()
+        return area
+
+    def _refresh_effect_list(self) -> None:
+        if not hasattr(self, "_effect_layout"):
+            return
+        layout = self._effect_layout
+        for widget in self._effect_cards:
+            widget.setParent(None)
+            widget.deleteLater()
+        self._effect_cards = []
+        needle = (self._effect_search.text().strip()
+                  if hasattr(self, "_effect_search") else "")
+        category = (self._effect_category.currentText()
+                    if hasattr(self, "_effect_category") else "All effects")
+        cat_filter = None if category in ("", "All effects") else category
+        found = effects.entries(cat_filter, needle)
+        if not found:
+            empty = hint("No effects match that filter.")
+            layout.insertWidget(layout.count() - 2, empty)
+            self._effect_cards.append(empty)
+            return
+        grouped = category in ("", "All effects") and not needle
+        current = None
+        for preset in found:
+            if grouped and preset.category != current:
+                current = preset.category
+                label = caption(current)
+                layout.insertWidget(layout.count() - 2, label)
+                self._effect_cards.append(label)
+            card = Card()
+            card.setFixedHeight(58)
+            card.setToolTip(f"{preset.label}  \u00b7  {preset.category}\n"
+                            f"{preset.note}")
+            card.clicked.connect(
+                lambda _checked=False, key=preset.key:
+                self.applyEffect.emit(key))
+            row = QHBoxLayout(card)
+            row.setContentsMargins(8, 5, 8, 5)
+            row.setSpacing(8)
+            thumb = QLabel()
+            thumb.setPixmap(preview_pixmap(effects.preview_png(preset.key),
+                                           78, 46))
+            thumb.setFixedSize(78, 46)
+            thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            row.addWidget(thumb)
+            text_box = QVBoxLayout()
+            text_box.setSpacing(0)
+            title = ElidedLabel(preset.label)
+            title.setObjectName("heading")
+            note = ElidedLabel(preset.note)
+            note.setObjectName("hint")
+            text_box.addWidget(title)
+            text_box.addWidget(note)
+            row.addLayout(text_box, 1)
+            mark = QLabel("+")
+            mark.setStyleSheet(
+                f"color: {theme.ACCENT}; font-size: 17px; font-weight: 700;")
+            row.addWidget(mark)
+            for child in card.findChildren(QLabel):
+                child.setAttribute(
+                    Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            layout.insertWidget(layout.count() - 2, card)
+            self._effect_cards.append(card)
 
     def _type_tab(self) -> QWidget:
         area, _body, layout = self._scroll()

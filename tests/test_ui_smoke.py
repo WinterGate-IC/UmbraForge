@@ -60,8 +60,8 @@ def test_text_is_discoverable_in_the_rail_and_menus(window):
 def test_all_build_sections_are_visible_and_reversible(window):
     panel = window.library_panel
     labels = panel.section_labels()
-    assert labels == ["Start", "Backgrounds", "Shapes", "Icons", "Text",
-                      "Fonts", "Images"]
+    assert labels == ["Start", "Backgrounds", "Shapes", "Icons", "Effects",
+                      "Text", "Fonts", "Images"]
     for index, label in enumerate(labels):
         panel.show_section(index)
         assert panel.current_section() == index
@@ -137,6 +137,88 @@ def test_icon_grids_reflow_to_the_rail_width(window):
         assert grid.columns() * grid.CELL + (grid.columns() - 1) * grid.GAP \
             <= grid.width()
         assert grid.columns() >= 4
+
+
+def test_effects_shelf_offers_the_whole_library(window):
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from umbraforge import effects
+
+    panel = window.library_panel
+    labels = panel.section_labels()
+    assert "Effects" in labels
+    panel.show_section(labels.index("Effects"))
+    QApplication.processEvents()
+    page = panel.pages.widget(labels.index("Effects"))
+    cards = [widget for widget in page.findChildren(QWidget)
+             if widget.__class__.__name__ == "Card"]
+    assert len(cards) >= len(effects.PRESETS) >= 70
+    assert len(effects.categories()) >= 5
+
+
+def test_effects_apply_clear_and_undo(window):
+    from umbraforge import effects
+
+    layer = window.design.active
+    window._apply_effect("outline_white")
+    assert layer.effects["preset"] == "outline_white"
+    assert layer.effects["outline"]["enabled"]
+
+    window._clear_effects()
+    assert not effects.any_enabled(layer.effects)
+
+    window._apply_effect("glitch_heavy")
+    assert effects.enabled(window.design.active.effects, "glitch")
+    window._undo()
+    assert not effects.any_enabled(window.design.active.effects)
+
+
+def test_effect_presets_survive_a_project_round_trip(window):
+    from umbraforge import effects
+    from umbraforge.layers import Design
+
+    window._apply_effect("neon_night")
+    design = Design.from_dict(window.design.to_dict())
+    stack = design.active.effects
+    assert stack["preset"] == "neon_night"
+    assert effects.describe(stack) == "Neon night"
+
+
+def test_loading_a_stack_with_new_effects_keeps_old_files_valid():
+    from umbraforge import effects
+    from umbraforge.layers import ShapeLayer
+
+    layer = ShapeLayer.from_dict({
+        "kind": "shape", "id": "abc", "effects": {
+            "shadow": {"enabled": True, "blur": 0.02},
+            "glow": {"enabled": True, "color": "#00ffcc"},
+        },
+    })
+    assert layer.effects["shadow"]["blur"] == 0.02
+    assert layer.effects["glow"]["color"] == "#00ffcc"
+    assert layer.effects["outline"]["enabled"] is False
+    assert effects.any_enabled(layer.effects)
+
+
+def test_layer_styles_copy_between_layers(window):
+    from umbraforge import effects
+
+    design = window.design
+    source, target = design.layers[2], design.layers[3]
+    design.selected = source.id
+    window._apply_effect("synthwave")
+    window._copy_style()
+    assert window._style_clipboard["preset"] == "synthwave"
+
+    design.selected = target.id
+    window.inspector.refresh()
+    assert not effects.any_enabled(target.effects)
+    window._paste_style()
+    assert target.effects["preset"] == "synthwave"
+    assert effects.enabled(target.effects, "rays")
+
+    window._undo()
+    assert not effects.any_enabled(design.layer(target.id).effects)
 
 
 def test_undo_and_redo_round_trip(window):

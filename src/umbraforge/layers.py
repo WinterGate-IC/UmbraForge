@@ -74,16 +74,15 @@ def new_id() -> str:
 
 
 def default_effects() -> dict:
-    return {
-        "shadow": {
-            "enabled": False, "color": "#000000", "opacity": 0.55,
-            "blur": 0.018, "dx": 0.004, "dy": 0.006,
-        },
-        "glow": {
-            "enabled": False, "color": "#ff7a3d", "opacity": 0.55,
-            "size": 0.022,
-        },
-    }
+    """The full effect stack, defaults only.
+
+    The catalogue lives in :mod:`umbraforge.effects`; importing it lazily keeps
+    this model module free of Pillow at import time while still giving every
+    layer one canonical set of keys to merge saved files against.
+    """
+    from . import effects
+
+    return effects.default_stack()
 
 
 #: Every non-destructive image adjustment understood by ``imaging.adjust``.

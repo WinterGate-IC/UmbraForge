@@ -32,7 +32,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from . import geometry, imaging, layers
+from . import effects, geometry, imaging, layers
 
 _COMPOSITION = {
     "normal": QPainter.CompositionMode.CompositionMode_SourceOver,
@@ -552,29 +552,10 @@ def _rotated_bounds(layer: layers.Layer, width: int, height: int) -> QRectF:
     return transform.mapRect(rect)
 
 
-def _effects_on(layer: layers.Layer) -> tuple[bool, bool]:
-    shadow = layer.effects.get("shadow", {})
-    glow = layer.effects.get("glow", {})
-    return bool(shadow.get("enabled")), bool(glow.get("enabled"))
-
-
 def _styled_layer(design: layers.Design, layer: layers.Layer,
                   width: int, height: int) -> tuple[QImage, QPointF]:
-    """Render a layer plus its shadow and glow, with transparent padding."""
-    shadow_on, glow_on = _effects_on(layer)
-    shortest = min(width, height)
-    shadow = layer.effects.get("shadow", {})
-    glow = layer.effects.get("glow", {})
-    blur = max(0.0, float(shadow.get("blur", 0.0))) * shortest
-    glow_size = max(0.0, float(glow.get("size", 0.0))) * shortest
-    dx = float(shadow.get("dx", 0.0)) * width
-    dy = float(shadow.get("dy", 0.0)) * height
-    margin = 2.0
-    if shadow_on:
-        margin = max(margin, blur * 2.4 + max(abs(dx), abs(dy)))
-    if glow_on:
-        margin = max(margin, glow_size * 2.6)
-    margin = math.ceil(margin) + 2
+    """Render a layer plus its effect stack, with transparent padding."""
+    margin = effects.margin(layer.effects, width, height)
 
     bounds = _rotated_bounds(layer, width, height)
     payload = layer.to_dict()
@@ -604,25 +585,7 @@ def _styled_layer(design: layers.Design, layer: layers.Layer,
     painter.end()
 
     content = imaging.qimage_to_pil(temp)
-    composed = content
-    if glow_on:
-        radius = max(1.0, glow_size * 1.15)
-        alpha = content.getchannel("A").filter(ImageFilter.GaussianBlur(radius))
-        glow_image = imaging.tint_mask(
-            alpha, imaging.hex_to_rgb(glow.get("color", "#ff7a3d")),
-            float(glow.get("opacity", 0.55)))
-        composed = Image.alpha_composite(glow_image, composed)
-    if shadow_on:
-        radius = max(0.0, blur)
-        alpha = content.getchannel("A")
-        if radius >= 0.3:
-            alpha = alpha.filter(ImageFilter.GaussianBlur(radius))
-        shadow_image = imaging.tint_mask(
-            alpha, imaging.hex_to_rgb(shadow.get("color", "#000000")),
-            float(shadow.get("opacity", 0.55)))
-        offset = Image.new("RGBA", composed.size, (0, 0, 0, 0))
-        offset.paste(shadow_image, (int(round(dx)), int(round(dy))))
-        composed = Image.alpha_composite(offset, composed)
+    composed = effects.apply_stack(content, layer.effects, width, height)
 
     result = imaging.pil_to_qimage(composed)
     _remember(_STYLED_CACHE, cache_key, result, _MAX_STYLED)
@@ -633,9 +596,8 @@ def _paint_layer(painter: QPainter, design: layers.Design,
                  layer: layers.Layer, width: int, height: int) -> None:
     if not layer.visible or layer.opacity <= 0.001:
         return
-    shadow_on, glow_on = _effects_on(layer)
-    needs_composite = (shadow_on or glow_on or layer.blend != "normal"
-                       or layer.opacity < 0.999)
+    needs_composite = (effects.any_enabled(layer.effects)
+                       or layer.blend != "normal" or layer.opacity < 0.999)
     if needs_composite:
         image, origin = _styled_layer(design, layer, width, height)
         painter.save()
