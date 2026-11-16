@@ -43,4 +43,10 @@ def window(qapp, tmp_path):
     win._dirty = False
     win.close()
     win.deleteLater()
+    # ``processEvents`` alone does not flush DeferredDelete, so closed windows
+    # would keep their whole widget tree alive and make every later restyle
+    # slower. Flush them explicitly.
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     qapp.processEvents()

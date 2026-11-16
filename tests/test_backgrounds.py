@@ -22,8 +22,9 @@ def test_presets_are_unique_and_labelled():
 
 def test_categories_are_stable():
     expected = ["Classic", "Warm", "Cool", "Minimal", "Tech", "Retro",
-                "Utility"]
+                "Nature", "Print", "Neon", "Utility"]
     assert backgrounds.categories() == expected
+    assert len(backgrounds.PRESETS) >= 30
 
 
 def _mean(image) -> float:

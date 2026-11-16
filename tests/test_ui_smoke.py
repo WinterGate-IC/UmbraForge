@@ -60,8 +60,8 @@ def test_text_is_discoverable_in_the_rail_and_menus(window):
 def test_all_build_sections_are_visible_and_reversible(window):
     panel = window.library_panel
     labels = panel.section_labels()
-    assert labels == ["Start", "Backgrounds", "Shapes", "Icons", "Effects",
-                      "Text", "Fonts", "Images"]
+    assert labels == ["Start", "Templates", "Backgrounds", "Overlays",
+                      "Shapes", "Icons", "Effects", "Text", "Fonts", "Images"]
     for index, label in enumerate(labels):
         panel.show_section(index)
         assert panel.current_section() == index
@@ -130,7 +130,7 @@ def test_icon_grids_reflow_to_the_rail_width(window):
     panel = window.library_panel
     panel.show_section(panel.section_labels().index("Shapes"))
     QApplication.processEvents()
-    grids = [widget for widget in panel.pages.widget(2).findChildren(QWidget)
+    grids = [widget for widget in panel.pages.widget(4).findChildren(QWidget)
              if widget.__class__.__name__ == "IconGrid"]
     assert grids
     for grid in grids:

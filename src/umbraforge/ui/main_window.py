@@ -34,6 +34,7 @@ from .. import (
     geometry,
     imaging,
     licensing,
+    overlays,
     renderer,
     templates,
     text_styles,
@@ -549,6 +550,8 @@ class MainWindow(QMainWindow):
         self.library_panel.fontChosen.connect(self._set_selected_font)
         self.library_panel.applyEffect.connect(self._apply_effect)
         self.library_panel.clearEffects.connect(self._clear_effects)
+        self.library_panel.applyOverlay.connect(self._apply_overlay)
+        self.library_panel.clearOverlays.connect(self._clear_overlays)
         self.library_panel.copyStyle.connect(self._copy_style)
         self.library_panel.pasteStyle.connect(self._paste_style)
         self.act_grid.toggled.connect(self.canvas_set_grid)
@@ -1285,6 +1288,28 @@ class MainWindow(QMainWindow):
             return
         self._set_design(design, None)
         self._flash(f"Started from {design.name}. Every layer is editable.")
+
+    # ------------------------------------------------------------- overlays
+    def _apply_overlay(self, key: str) -> None:
+        preset = overlays.get(key)
+        if preset is None:
+            return
+        self.design.overlays = overlays.stack_for(key)
+        renderer.clear_caches()
+        self._record(f"Overlay: {preset.label}", f"overlay-{key}")
+        self._refresh_all()
+        self._flash(f"{preset.label} overlay applied \u00b7 "
+                    "tune or clear it in Canvas > Overlays.")
+
+    def _clear_overlays(self) -> None:
+        if not overlays.any_enabled(self.design.overlays):
+            self._flash("No canvas overlay to clear.")
+            return
+        self.design.overlays = overlays.default_stack()
+        renderer.clear_caches()
+        self._record("Clear overlays", "overlay-clear")
+        self._refresh_all()
+        self._flash("Overlays cleared. The canvas renders exactly as saved.")
 
     def _apply_background(self, key: str) -> None:
         try:

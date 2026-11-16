@@ -71,6 +71,16 @@ def test_the_new_primitives_render():
         ("hue_shift", {"degrees": 120.0}),
         ("dither", {"size": 4.0}),
         ("edges", {}),
+        ("zoom_blur", {"amount": 0.18}),
+        ("tilt_shift", {"focus": 0.3}),
+        ("swirl", {"angle": 2.0}),
+        ("wave", {"amplitude": 0.03}),
+        ("bulge", {"strength": 0.5}),
+        ("kaleidoscope", {"sectors": 6}),
+        ("sharpen", {"amount": 0.7}),
+        ("charcoal", {"amount": 0.8}),
+        ("comic", {"amount": 0.8}),
+        ("solarize", {"level": 0.6}),
     ):
         stack = effects.default_stack()
         stack[name].update(params)
@@ -78,6 +88,15 @@ def test_the_new_primitives_render():
         out = effects.apply_stack(base, stack, 900, 900)
         assert out.size == base.size
         assert out.tobytes() != base.tobytes(), name
+
+
+def test_the_sketch_category_and_new_recipes_are_present():
+    assert "Sketch" in effects.categories()
+    keys = {preset.key for preset in effects.PRESETS}
+    for key in ("zoom_punch", "tilt_miniature", "swirl_vortex",
+                "wave_liquid", "bulge_lens", "kaleido_six",
+                "charcoal_draw", "comic_ink", "solar_neon", "crisp_hard"):
+        assert key in keys
 
 
 def test_previews_render_for_every_recipe():

@@ -24,7 +24,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import effects, fonts, geometry, imaging, layers, presets, theme
+from .. import (effects, fonts, geometry, imaging, layers, overlays, presets,
+                theme)
 from ..layers import (
     ALIGNMENTS,
     BLEND_MODES,
@@ -841,6 +842,29 @@ class Inspector(QWidget):
                                                float(value) / 100.0))
         layout.addWidget(self.bg_vignette)
 
+        self._section(layout, "Overlays")
+        layout.addWidget(hint(
+            "Canvas-wide finishes sitting above every layer: grain, light "
+            "leaks, halftone, frames and weather. A cleared stack changes "
+            "nothing, so old projects keep rendering exactly as before."))
+        self.overlay_combo = QComboBox()
+        self.overlay_combo.addItem("No overlay", "")
+        for preset in overlays.PRESETS:
+            self.overlay_combo.addItem(
+                f"{preset.category}  \u00b7  {preset.label}", preset.key)
+        self.overlay_combo.currentIndexChanged.connect(self._overlay_selected)
+        self._labeled(layout, "Recipe", self.overlay_combo)
+        self.overlay_info = QLabel("No overlay")
+        self.overlay_info.setObjectName("hint")
+        self.overlay_info.setWordWrap(True)
+        layout.addWidget(self.overlay_info)
+        clear_overlay = QPushButton("Clear overlays")
+        clear_overlay.setObjectName("chip")
+        clear_overlay.setToolTip(
+            "Remove every canvas overlay and return to a no-op")
+        clear_overlay.clicked.connect(self._clear_overlays)
+        layout.addWidget(clear_overlay)
+
         layout.addSpacing(10)
         warn = QLabel("Removing layers cannot be undone after you save, but "
                       "Undo still works while the design is open.")
@@ -884,6 +908,29 @@ class Inspector(QWidget):
         design = self.design()
         self._apply(label, f"bg-{key}",
                     lambda: design.background.__setitem__(key, value))
+
+    def _overlay_selected(self, _index: int) -> None:
+        if self._loading:
+            return
+        key = str(self.overlay_combo.currentData() or "")
+        design = self.design()
+        if not key:
+            self._apply("Clear overlays", "overlay-clear",
+                        lambda: setattr(design, "overlays",
+                                        overlays.default_stack()))
+        else:
+            stack = overlays.stack_for(key)
+            self._apply("Apply overlay", f"overlay-{key}",
+                        lambda: setattr(design, "overlays", stack))
+        self._sync_canvas()
+
+    def _clear_overlays(self) -> None:
+        if self._loading:
+            return
+        design = self.design()
+        self._apply("Clear overlays", "overlay-clear",
+                    lambda: setattr(design, "overlays", overlays.default_stack()))
+        self._sync_canvas()
 
     def _choose_background_image(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -955,6 +1002,15 @@ class Inspector(QWidget):
         self.bg_pattern_scale.set_value(
             float(background.get("pattern_scale", 0.35)) * 100)
         self.bg_vignette.set_value(float(background.get("vignette", 0.25)) * 100)
+        stack = layers.merge(overlays.default_stack(), design.overlays)
+        overlay_key = str(stack.get("preset") or "")
+        overlay_index = self.overlay_combo.findData(overlay_key)
+        if overlay_index < 0:
+            overlay_index = 0
+        self.overlay_combo.setCurrentIndex(overlay_index)
+        self.overlay_info.setText(
+            f"Active: {overlays.describe(stack)}" if overlays.any_enabled(stack)
+            else "No overlay - the canvas renders exactly as saved.")
         image_id = background.get("asset_id", "")
         self.bg_image_name.setText(
             asset_name(design.assets, image_id) if image_id else "No image")

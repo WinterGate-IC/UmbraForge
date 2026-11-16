@@ -32,7 +32,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from . import effects, geometry, imaging, layers
+from . import effects, geometry, imaging, layers, overlays
 
 _COMPOSITION = {
     "normal": QPainter.CompositionMode.CompositionMode_SourceOver,
@@ -632,6 +632,11 @@ def render_design(design: layers.Design, width: int | None = None,
     for layer in design.layers:
         _paint_layer(painter, design, layer, out_width, out_height)
     painter.end()
+    if overlays.any_enabled(design.overlays):
+        rendered = imaging.qimage_to_pil(image)
+        rendered = overlays.apply_stack(rendered, design.overlays,
+                                        out_width, out_height)
+        image = imaging.pil_to_qimage(rendered)
     return image
 
 

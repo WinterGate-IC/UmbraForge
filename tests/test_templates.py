@@ -11,13 +11,19 @@ from umbraforge.layers import Design, ImageLayer, ShapeLayer, TextLayer
 def test_template_keys_and_categories_are_sane():
     keys = [template.key for template in templates.TEMPLATES]
     assert len(keys) == len(set(keys))
-    assert len(keys) >= 10
+    assert len(keys) >= 30
     for template in templates.TEMPLATES:
         assert template.name and template.note and template.category
         assert callable(template.build)
     categories = templates.categories()
     assert len(categories) == len(set(categories))
     assert "Featured" in categories
+    assert "Meme" in categories
+    assert "Propaganda" in categories
+    meme = [t for t in templates.TEMPLATES if t.category == "Meme"]
+    propaganda = [t for t in templates.TEMPLATES if t.category == "Propaganda"]
+    assert len(meme) >= 5
+    assert len(propaganda) >= 5
 
 
 def test_get_lookup():

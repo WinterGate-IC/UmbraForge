@@ -124,6 +124,17 @@ def default_background() -> dict:
     }
 
 
+def default_overlays() -> dict:
+    """Canvas-wide overlays, kept in their own module to stay optional.
+
+    Imported lazily so the document model does not pull Pillow in until a
+    design actually needs its overlay defaults.
+    """
+    from .overlays import default_stack
+
+    return default_stack()
+
+
 def merge(defaults: dict, values: dict | None) -> dict:
     out = copy.deepcopy(defaults)
     if not values:
@@ -476,6 +487,7 @@ class Design:
     width: int = 1200
     height: int = 1200
     background: dict = field(default_factory=default_background)
+    overlays: dict = field(default_factory=default_overlays)
     layers: list[Layer] = field(default_factory=list)
     assets: dict = field(default_factory=dict)
     selected: str | None = None
@@ -606,6 +618,7 @@ class Design:
             "width": int(self.width),
             "height": int(self.height),
             "background": copy.deepcopy(self.background),
+            "overlays": copy.deepcopy(self.overlays),
             "layers": [layer.to_dict() for layer in self.layers],
             "assets": copy.deepcopy(self.assets),
             "selected": self.selected if include_selection else None,
@@ -615,6 +628,7 @@ class Design:
         self.name = str(data.get("name") or "Untitled")
         self.set_size(int(data.get("width") or 1200), int(data.get("height") or 1200))
         self.background = merge(default_background(), data.get("background"))
+        self.overlays = merge(default_overlays(), data.get("overlays"))
         self.assets = dict(data.get("assets") or {})
         layers: list[Layer] = []
         for raw in data.get("layers") or []:

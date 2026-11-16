@@ -64,8 +64,19 @@ EFFECT_DEFAULTS: dict[str, dict] = {
     },
     "blur": {"enabled": False, "radius": 0.006},
     "motion_blur": {"enabled": False, "radius": 0.012, "angle": 0.0},
+    "zoom_blur": {"enabled": False, "amount": 0.18, "steps": 10},
+    "tilt_shift": {"enabled": False, "focus": 0.35, "strength": 1.0},
     "pixelate": {"enabled": False, "size": 0.012},
+    "swirl": {"enabled": False, "angle": 2.4, "radius": 0.55},
+    "wave": {"enabled": False, "amplitude": 0.03, "wavelength": 0.18,
+             "angle": 0.0},
+    "bulge": {"enabled": False, "strength": 0.55, "radius": 0.45},
+    "kaleidoscope": {"enabled": False, "sectors": 6},
+    "sharpen": {"enabled": False, "amount": 0.7},
+    "charcoal": {"enabled": False, "amount": 0.75},
+    "comic": {"enabled": False, "amount": 0.7},
     "posterize": {"enabled": False, "levels": 4},
+    "solarize": {"enabled": False, "level": 0.6},
     "duotone": {"enabled": False, "color": "#ff9a5c", "color2": "#140b24"},
     "gradient_map": {
         "enabled": False, "color": "#f4fbff",
@@ -98,7 +109,10 @@ EFFECT_DEFAULTS: dict[str, dict] = {
 
 #: Stable application order. Each stage reads top to bottom.
 _CONTENT_ORDER = (
-    "blur", "motion_blur", "pixelate", "edges", "posterize", "duotone",
+    "blur", "motion_blur", "zoom_blur", "tilt_shift", "pixelate",
+    "swirl", "wave", "bulge", "kaleidoscope",
+    "edges", "charcoal", "comic", "sharpen",
+    "posterize", "solarize", "duotone",
     "threshold", "dither", "gradient_map", "invert", "saturate", "contrast",
     "emboss", "halftone", "hue_shift", "chromatic",
 )
@@ -403,6 +417,73 @@ PRESETS: tuple[Preset, ...] = (
             inner_glow={"color": "#dff6ff", "opacity": 0.5, "size": 0.02},
             bloom={"color": "#bfe9ff", "opacity": 0.3, "size": 0.02},
             chromatic={"offset": 0.003}),
+    _recipe("zoom_soft", "Soft zoom", "Distortion",
+            "A gentle radial rush toward the centre.",
+            zoom_blur={"amount": 0.08, "steps": 8}),
+    _recipe("zoom_punch", "Zoom punch", "Distortion",
+            "Hard radial streaking, like a fast push-in.",
+            zoom_blur={"amount": 0.24, "steps": 16}),
+    _recipe("tilt_miniature", "Miniature", "Distortion",
+            "Tilt-shift band that makes the art look tiny.",
+            tilt_shift={"focus": 0.22, "strength": 1.4}),
+    _recipe("tilt_wide", "Wide focus", "Distortion",
+            "Soft top and bottom with a broad sharp band.",
+            tilt_shift={"focus": 0.5, "strength": 0.8}),
+    _recipe("swirl_vortex", "Vortex", "Distortion",
+            "Strong spiral twist through the middle.",
+            swirl={"angle": 3.2, "radius": 0.62}),
+    _recipe("swirl_gentle", "Gentle swirl", "Distortion",
+            "A subtle curl around the centre.",
+            swirl={"angle": 1.4, "radius": 0.5}),
+    _recipe("wave_liquid", "Liquid wave", "Distortion",
+            "Wide rolling displacement.",
+            wave={"amplitude": 0.035, "wavelength": 0.22, "angle": 0.0}),
+    _recipe("wave_ripple", "Ripple", "Distortion",
+            "Tight horizontal ripples across the layer.",
+            wave={"amplitude": 0.012, "wavelength": 0.09, "angle": 0.0}),
+    _recipe("bulge_lens", "Fish-eye", "Distortion",
+            "Bulging lens distortion at the centre.",
+            bulge={"strength": 0.6, "radius": 0.55}),
+    _recipe("pinch_lens", "Pinch", "Distortion",
+            "Sucked-in centre, like a black hole.",
+            bulge={"strength": -0.55, "radius": 0.5}),
+    _recipe("kaleido_six", "Kaleidoscope", "Distortion",
+            "Six-fold mirrored symmetry.",
+            kaleidoscope={"sectors": 6}),
+    _recipe("kaleido_twelve", "Fine kaleidoscope", "Distortion",
+            "Dense twelve-fold pattern.",
+            kaleidoscope={"sectors": 12}),
+
+    # ---------------------------------------------------------------- sketch
+    _recipe("charcoal_draw", "Charcoal", "Sketch",
+            "Loose charcoal strokes and paper tone.",
+            charcoal={"amount": 0.8}),
+    _recipe("charcoal_soft", "Soft charcoal", "Sketch",
+            "Gentle sketch wash over the original.",
+            charcoal={"amount": 0.45}, contrast={"amount": 1.05}),
+    _recipe("comic_ink", "Comic ink", "Sketch",
+            "Flat colour with bold ink lines.",
+            comic={"amount": 0.75}),
+    _recipe("comic_pop", "Comic pop", "Sketch",
+            "Louder comic colour with a halftone screen.",
+            comic={"amount": 0.85}, saturate={"amount": 1.4},
+            halftone={"size": 0.012, "ink": "#141018",
+                      "paper": "#ffe3b0"}),
+    _recipe("crisp", "Crisp detail", "Sketch",
+            "Light unsharp pass to tighten edges.",
+            sharpen={"amount": 0.35}),
+    _recipe("crisp_hard", "Hard sharpen", "Sketch",
+            "Aggressive detail boost for small marks.",
+            sharpen={"amount": 0.85}, contrast={"amount": 1.12}),
+    _recipe("solar_flare", "Solar flare", "Sketch",
+            "Solarized burn with punched contrast.",
+            solarize={"level": 0.62}, contrast={"amount": 1.2}),
+    _recipe("solar_neon", "Solar neon", "Sketch",
+            "Solarized colour mapped to hot neon.",
+            solarize={"level": 0.55},
+            gradient_map={"color": "#f0fffb", "color3": "#22d3ee",
+                          "color2": "#3b0764"},
+            saturate={"amount": 1.3}),
 
     # ---------------------------------------------------------------- retro
     _recipe("crt", "CRT", "Retro",
@@ -862,6 +943,146 @@ def _inner_glow(content: Image.Image, color: str, opacity: float,
 # --------------------------------------------------------------------------
 # the stack
 # --------------------------------------------------------------------------
+def _remap(content: Image.Image, mapper, cap: int = 1600) -> Image.Image:
+    """Warp ``content`` with a destination->source coordinate function."""
+    width, height = content.size
+    scale = min(1.0, cap / max(1, width, height))
+    work_w = max(1, int(width * scale))
+    work_h = max(1, int(height * scale))
+    source = (content.convert("RGBA")
+              if (work_w, work_h) == (width, height)
+              else content.convert("RGBA").resize((work_w, work_h),
+                                                  Image.Resampling.LANCZOS))
+    array = np.asarray(source, dtype=np.float32)
+    yy, xx = np.mgrid[0:work_h, 0:work_w].astype(np.float32)
+    src_x, src_y = mapper(xx, yy, work_w, work_h)
+    src_x = np.clip(src_x, 0, work_w - 1.001)
+    src_y = np.clip(src_y, 0, work_h - 1.001)
+    x0 = np.floor(src_x).astype(np.int32)
+    y0 = np.floor(src_y).astype(np.int32)
+    x1 = np.minimum(x0 + 1, work_w - 1)
+    y1 = np.minimum(y0 + 1, work_h - 1)
+    wx = (src_x - x0)[..., None]
+    wy = (src_y - y0)[..., None]
+    top = array[y0, x0] * (1 - wx) + array[y0, x1] * wx
+    bottom = array[y1, x0] * (1 - wx) + array[y1, x1] * wx
+    warped = Image.fromarray(((top * (1 - wy) + bottom * wy)
+                              ).astype(np.uint8), "RGBA")
+    if (work_w, work_h) != (width, height):
+        warped = warped.resize((width, height), Image.Resampling.LANCZOS)
+    return warped
+
+
+def _swirl(content: Image.Image, angle: float, radius: float) -> Image.Image:
+    def mapper(x, y, w, h):
+        cx, cy = w * 0.5, h * 0.5
+        dx, dy = x - cx, y - cy
+        distance = np.sqrt(dx * dx + dy * dy)
+        reach = max(1.0, radius * min(w, h))
+        weight = np.clip((reach - distance) / reach, 0, 1)
+        twist = weight * weight * angle
+        cos, sin = np.cos(twist), np.sin(twist)
+        return cx + dx * cos - dy * sin, cy + dx * sin + dy * cos
+
+    return _remap(content, mapper)
+
+
+def _wave(content: Image.Image, amplitude: float, wavelength: float,
+          angle: float) -> Image.Image:
+    angle = math.radians(angle)
+
+    def mapper(x, y, w, h):
+        span = max(1.0, wavelength * min(w, h))
+        phase = (x * math.cos(angle) + y * math.sin(angle)) / span * math.tau
+        offset = np.sin(phase) * amplitude * min(w, h)
+        return x + offset * math.cos(angle + math.pi / 2), \
+            y + offset * math.sin(angle + math.pi / 2)
+
+    return _remap(content, mapper)
+
+
+def _bulge(content: Image.Image, strength: float, radius: float) -> Image.Image:
+    def mapper(x, y, w, h):
+        cx, cy = w * 0.5, h * 0.5
+        dx, dy = x - cx, y - cy
+        reach = max(1.0, radius * min(w, h))
+        distance = np.sqrt(dx * dx + dy * dy)
+        pull = 1.0 - strength * np.exp(-(distance / reach) ** 2)
+        return cx + dx * pull, cy + dy * pull
+
+    return _remap(content, mapper)
+
+
+def _kaleidoscope(content: Image.Image, sectors: float) -> Image.Image:
+    count = max(3, min(24, int(sectors)))
+    segment = math.tau / count
+
+    def mapper(x, y, w, h):
+        cx, cy = w * 0.5, h * 0.5
+        dx, dy = x - cx, y - cy
+        distance = np.sqrt(dx * dx + dy * dy)
+        angle = np.arctan2(dy, dx)
+        folded = np.abs(((angle + math.pi) % segment) - segment / 2)
+        return cx + np.cos(folded) * distance, cy + np.sin(folded) * distance
+
+    return _remap(content, mapper)
+
+
+def _zoom_blur(content: Image.Image, amount: float,
+               steps: int = 10) -> Image.Image:
+    width, height = content.size
+    base = content.convert("RGBA")
+    result = base.copy()
+    steps = max(2, min(30, int(steps)))
+    for index in range(1, steps + 1):
+        scale = 1.0 + amount * index / steps
+        scaled = base.resize((max(1, int(width * scale)),
+                              max(1, int(height * scale))),
+                             Image.Resampling.BILINEAR)
+        left = (scaled.width - width) // 2
+        top = (scaled.height - height) // 2
+        cropped = scaled.crop((left, top, left + width, top + height))
+        result = Image.blend(result, cropped, 1.0 / (index + 1))
+    return result
+
+
+def _tilt_shift(content: Image.Image, focus: float,
+                strength: float) -> Image.Image:
+    width, height = content.size
+    blurred = content.filter(ImageFilter.GaussianBlur(
+        max(1.0, min(width, height) * 0.012 * max(0.2, strength))))
+    band = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
+    falloff = np.clip(1.0 - np.abs(band - 0.5) / max(0.02, focus), 0, 1) ** 0.7
+    mask = np.repeat((falloff * 255).astype(np.uint8), width, axis=1)
+    mask_image = Image.fromarray(mask, "L")
+    return Image.composite(content, blurred, mask_image)
+
+
+def _charcoal(content: Image.Image, amount: float) -> Image.Image:
+    grey = content.convert("L")
+    edges = grey.filter(ImageFilter.FIND_EDGES)
+    strokes = ImageOps.invert(edges)
+    stroke_rgb = ImageOps.colorize(strokes, black=(30, 27, 24),
+                                   white=(238, 230, 212))
+    tone_rgb = ImageOps.colorize(grey, black=(22, 20, 20),
+                                 white=(246, 240, 226))
+    blended = Image.blend(tone_rgb, stroke_rgb,
+                          max(0.0, min(1.0, amount)))
+    return _attach(content, blended)
+
+
+def _comic(content: Image.Image, amount: float) -> Image.Image:
+    rgb = content.convert("RGB")
+    poster = ImageOps.posterize(
+        ImageEnhance.Color(rgb).enhance(1.5), 3)
+    edges = ImageOps.invert(rgb.filter(ImageFilter.FIND_EDGES).convert("L"))
+    lines = ImageOps.colorize(edges, black=(18, 16, 24),
+                              white=(255, 255, 255))
+    inked = ImageChops.multiply(poster, lines)
+    blended = Image.blend(rgb, inked, max(0.0, min(1.0, amount)))
+    return _attach(content, blended)
+
+
 def apply_stack(image: Image.Image, settings: dict | None,
                 width: int, height: int) -> Image.Image:
     """Return ``image`` with the enabled effects baked in."""
@@ -932,6 +1153,30 @@ def apply_stack(image: Image.Image, settings: dict | None,
             content = _motion(content,
                               _number(entry, "radius", 0.012) * shortest,
                               _number(entry, "angle", 0.0))
+        elif name == "zoom_blur":
+            content = _zoom_blur(content,
+                                 max(0.01, _number(entry, "amount", 0.18)),
+                                 int(_number(entry, "steps", 10)))
+        elif name == "tilt_shift":
+            content = _tilt_shift(content,
+                                  max(0.05, _number(entry, "focus", 0.35)),
+                                  _number(entry, "strength", 1.0))
+        elif name == "swirl":
+            content = _swirl(content,
+                             _number(entry, "angle", 2.4),
+                             max(0.05, _number(entry, "radius", 0.55)))
+        elif name == "wave":
+            content = _wave(content,
+                            _number(entry, "amplitude", 0.03),
+                            max(0.01, _number(entry, "wavelength", 0.18)),
+                            _number(entry, "angle", 0.0))
+        elif name == "bulge":
+            content = _bulge(content,
+                             max(-0.95, min(0.95, _number(entry, "strength",
+                                                          0.55))),
+                             max(0.05, _number(entry, "radius", 0.45)))
+        elif name == "kaleidoscope":
+            content = _kaleidoscope(content, _number(entry, "sectors", 6))
         elif name == "pixelate":
             content = _pixelate(content,
                                 max(2.0, _number(entry, "size", 0.012) * shortest))
@@ -940,6 +1185,22 @@ def apply_stack(image: Image.Image, settings: dict | None,
                              entry.get("color", "#2b2b33"),
                              entry.get("background", "#f7f3ea"),
                              _number(entry, "amount", 0.9))
+        elif name == "charcoal":
+            content = _charcoal(content,
+                                max(0.0, min(1.0, _number(entry, "amount",
+                                                         0.75))))
+        elif name == "comic":
+            content = _comic(content,
+                             max(0.0, min(1.0, _number(entry, "amount", 0.7))))
+        elif name == "sharpen":
+            content = _attach(content, ImageEnhance.Sharpness(
+                content.convert("RGB")).enhance(
+                    1.0 + max(0.0, _number(entry, "amount", 0.7)) * 2.0))
+        elif name == "solarize":
+            level = int(max(0.05, min(0.95, _number(entry, "level", 0.6)))
+                        * 255)
+            content = _attach(content, ImageOps.solarize(
+                content.convert("RGB"), threshold=level))
         elif name == "posterize":
             levels = max(2, min(32, int(_number(entry, "levels", 4))))
             bits = max(1, min(8, int(round(math.log2(levels)))))

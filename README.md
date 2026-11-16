@@ -26,13 +26,20 @@ logos. Forks are welcome but must use their own name - see
 - **Layered emblem building** with 141 vector shapes, 157 SVG icons, 28 type
   styles, a large installed-font shelf, images, effects, blend modes and
   stacking controls. Build crests, badges and social-club emblems from parts.
-- **12 editable background presets** for instant starts - forge-lit violet,
-  ember haze, starfield, ocean grid, hex mesh, aurora waves, scanlines and more
-  - applied as ordinary `design.background` values you can still recolour,
-  repattern or switch to transparent in the Canvas tab.
-- **12 editable templates** to start from, including Ember Sigil, Night Crown,
-  Void Orbit, Aurora Field and The Long Night. Every part of a template is a
-  normal layer.
+- **37 editable background presets** across ten categories for instant starts -
+  forge-lit violet, ember haze, starfield, ocean grid, hex mesh, aurora waves,
+  forest floor, risograph, synth sunset, scanlines and more - applied as
+  ordinary `design.background` values you can still recolour, repattern or
+  switch to transparent in the Canvas tab.
+- **36 editable templates** grouped by category, from wallpapers, social cards
+  and posters to a whole **Meme** shelf (top/bottom, no/yes, expanding brain,
+  deep fried, galaxy brain) and a **Propaganda** shelf (Rise, Unite, Victory,
+  Attention, Our Voice). Every part of a template is a normal layer.
+- **A 43-preset Overlays library** that sits above the whole canvas: film grain,
+  light leaks, lens flares, bokeh, holo and prism washes, rain, snow, embers,
+  sparkles, confetti, halftone, grids, scanlines, VHS bars, frames, corner
+  marks, paper and vignettes. Overlays are non-destructive, editable from the
+  Canvas tab and a cleared stack is a pixel-identical no-op.
 - **Background removal** in three flavours:
   - *Auto* samples the border and flood-fills only connected pixels, so a
     subject that shares a colour with the background survives.
@@ -41,13 +48,14 @@ logos. Forks are welcome but must use their own name - see
     `rembg` is installed.
 - **Image editing** with a non-destructive adjustment stack, fit modes and
   shape masks.
-- **A 76-recipe effects library** across Light, Shadow, Outline, Colour,
-  Texture, Distortion and Retro, built on 27 tunable primitives (glow, bloom,
-  god rays, long shadow, outline, blur, pixelate, duotone, gradient map,
-  halftone, dither, edge sketch, hue shift, chromatic split, glitch, scanlines,
-  grain and more). Each recipe has a rendered preview, effects live in a layer
-  stack and are never baked in until you export, and **Copy**/**Paste** carries
-  a tuned style from one layer to another.
+- **A 96-recipe effects library** across Light, Shadow, Outline, Colour,
+  Texture, Distortion, Sketch and Retro, built on 37 tunable primitives (glow,
+  bloom, god rays, long shadow, outline, blur, zoom blur, tilt shift, swirl,
+  wave, bulge, kaleidoscope, pixelate, duotone, gradient map, halftone, dither,
+  edge sketch, charcoal, comic ink, sharpen, solarize, hue shift, chromatic
+  split, glitch, scanlines, grain and more). Each recipe has a rendered preview,
+  effects live in a layer stack and are never baked in until you export, and
+  **Copy**/**Paste** carries a tuned style from one layer to another.
 - **One Save flow** for PNG, JPEG, WebP, BMP, TIFF, Windows `.ico`, macOS
   `.icns`, a complete web-icon kit and the editable project. PNG is the default;
   sizes and compression adapt to the machine's safe memory budget.
@@ -77,7 +85,7 @@ outline on the right:
 
 The whole library at a glance:
 
-![76 effect previews](docs/images/effects-library.png)
+![Effect previews](docs/images/effects-library.png)
 
 ## Requirements
 
@@ -93,8 +101,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.3-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.3.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.4-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.4.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -285,7 +293,7 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.3",
+  "saved_with": "UmbraForge 0.1.4",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
@@ -380,11 +388,28 @@ umbraforge/
 
 ## Status
 
-Version 0.1.3 is the current Windows release. It ships as one timestamped
+Version 0.1.4 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
+
+What changed in 0.1.4:
+
+- **Templates** is now its own Build section with search, category filters and
+  rendered previews. The gallery grew from 12 to **36 designs**, adding Meme
+  and Propaganda shelves plus social, event and utility cards;
+- **Overlays** is a new Build section and Canvas-tab picker with **43 presets**
+  over 23 canvas-wide primitives - grain, light leaks, flares, bokeh, holo,
+  rain, snow, embers, sparkles, confetti, halftone, grids, scanlines, VHS,
+  frames, paper and vignettes;
+- the **backgrounds** library grew from 12 to **37 presets** with new Nature,
+  Print and Neon categories;
+- the **effects** library grew from 76 to **96 recipes** and gained a Sketch
+  category, with 37 primitives including zoom blur, tilt shift, swirl, wave,
+  bulge, kaleidoscope, sharpen, charcoal, comic ink and solarize;
+- overlays persist in `.umbra` as `design.overlays`; old files load with a
+  cleared stack that renders identically to before.
 
 What changed in 0.1.3:
 
