@@ -6,7 +6,7 @@ from PIL import Image
 from PySide6.QtWidgets import QPushButton
 
 from umbraforge import branding, presets
-from umbraforge.layers import IconLayer, ShapeLayer, TextLayer
+from umbraforge.layers import EmojiLayer, IconLayer, ShapeLayer, TextLayer
 
 
 def test_window_starts_with_an_editable_template(window):
@@ -31,13 +31,70 @@ def test_add_shape_icon_and_text(window):
     assert isinstance(window.design.active, IconLayer)
     assert len(window.design.layers) == before + 2
 
+    window._add_emoji("\U0001F525")
+    assert isinstance(window.design.active, EmojiLayer)
+    assert window.design.active.char == "\U0001F525"
+    assert len(window.design.layers) == before + 3
+
     window._add_text("display")
     assert isinstance(window.design.active, TextLayer)
-    assert len(window.design.layers) == before + 3
+    assert len(window.design.layers) == before + 4
     assert window.design.active.text
     # Adding text opens the words field, ready to replace the sample.
     assert window.inspector._text_editor is not None
     assert window.inspector._text_editor.toPlainText() == window.design.active.text
+
+
+def test_rail_swaps_selected_shape_icon_and_emoji(window):
+    window._add_shape("circle")
+    shape = window.design.active
+    assert shape.name.startswith("Circle")
+    window._swap_shape("star5")
+    assert shape.shape == "star5"
+    assert shape.name.startswith("Five-point star")
+    assert window.design.active is shape
+
+    window._add_icon("star")
+    icon = window.design.active
+    window._swap_icon("skull")
+    assert icon.icon == "skull"
+    assert icon.name.startswith("Skull")
+
+    window._add_emoji("\U0001F600")
+    emoji = window.design.active
+    window._swap_emoji("\U0001F984")
+    assert emoji.char == "\U0001F984"
+    assert emoji.name == "Unicorn"
+
+    # Swapping only edits the selected layer; it never adds another.
+    count = len(window.design.layers)
+    window._swap_shape("hexagon")
+    assert shape.shape == "star5"          # selection moved to the emoji layer
+    assert len(window.design.layers) == count
+    window._undo()
+    assert window.design.layer(emoji.id).char == "\U0001F600"
+
+
+def test_inspector_edits_an_emoji_layer(window, qapp):
+    window._add_emoji("\U0001F525")
+    layer = window.design.active
+    inspector = window.inspector
+    inspector.refresh()
+
+    inspector._set_emoji_tint(layer, True)
+    assert layer.color
+    inspector._set_emoji_tint_colour(layer, "#00ff66")
+    assert layer.color == "#00ff66"
+    inspector._set_emoji_tint(layer, False)
+    assert layer.color == ""
+
+    inspector._use_recent_emoji(layer, "\U0001F984")
+    assert layer.char == "\U0001F984"
+    qapp.processEvents()
+    assert inspector.kind_note.text() == "Unicorn"
+
+    window._undo()
+    assert window.design.layer(layer.id).char == "\U0001F525"
 
 
 def test_text_is_discoverable_in_the_rail_and_menus(window):
@@ -61,7 +118,8 @@ def test_all_build_sections_are_visible_and_reversible(window):
     panel = window.library_panel
     labels = panel.section_labels()
     assert labels == ["Start", "Templates", "Backgrounds", "Overlays",
-                      "Shapes", "Icons", "Effects", "Text", "Fonts", "Images"]
+                      "Shapes", "Icons", "Emoji", "Effects", "Text", "Fonts",
+                      "Images"]
     for index, label in enumerate(labels):
         panel.show_section(index)
         assert panel.current_section() == index
@@ -120,6 +178,29 @@ def test_build_rail_never_clips_its_contents(window):
             right = child.mapTo(body, child.rect().topLeft()).x() + child.width()
             assert right <= body.width() + 1, (
                 f"{label}: {child.__class__.__name__} sticks out")
+
+
+def test_lazily_built_sections_scroll_to_their_full_content(window):
+    """Sections filled on first view must expose everything below the fold."""
+    from PySide6.QtWidgets import QApplication, QScrollArea
+
+    window.resize(1080, 700)
+    window.show()
+    panel = window.library_panel
+    for label in ("Templates", "Backgrounds", "Overlays", "Emoji", "Effects"):
+        index = panel.section_labels().index(label)
+        panel.show_section(index)
+        for _ in range(3):
+            QApplication.processEvents()
+        page = panel.pages.widget(index)
+        area = (page if isinstance(page, QScrollArea)
+                else page.findChild(QScrollArea))
+        assert area is not None, label
+        body = area.widget()
+        content = body.layout().sizeHint().height()
+        assert content > area.viewport().height(), label
+        assert body.height() >= content, label
+        assert area.verticalScrollBar().maximum() > 0, label
 
 
 def test_icon_grids_reflow_to_the_rail_width(window):

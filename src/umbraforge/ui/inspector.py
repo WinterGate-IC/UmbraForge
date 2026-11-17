@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import random
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -24,14 +26,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import (effects, fonts, geometry, imaging, layers, overlays, presets,
-                theme)
+from .. import (backgrounds, effects, emojis, fonts, geometry, imaging, layers,
+                overlays, presets, theme)
 from ..layers import (
     ALIGNMENTS,
     BLEND_MODES,
     PATTERNS,
     VALIGNMENTS,
     Design,
+    EmojiLayer,
     IconLayer,
     ImageLayer,
     ShapeLayer,
@@ -43,15 +46,18 @@ from ..layers import (
 from .common import (
     Card,
     ColorButton,
+    IconGrid,
     NumberField,
     PercentField,
     SliderField,
     caption,
     combo_box,
+    draw_emoji_icon,
     hint,
     muted,
     rule,
 )
+from .pickers import pick_glyph
 
 PRESET_LABELS = [(preset.key, f"{preset.name}  \u00b7  {preset.width} \u00d7 {preset.height}")
                  for preset in presets.PRESETS]
@@ -69,12 +75,27 @@ MASK_OPTIONS = [("none", "No mask")] + [
     (key, f"Mask: {label}") for key, (label, _) in geometry.SHAPES.items()
 ]
 
+#: Overlay component sliders: stored value -> display value multiplier.
+OVERLAY_PARAMS: dict[str, tuple[str, float, float, int, float, str]] = {
+    "opacity": ("Opacity", 0, 100, 0, 100.0, "%"),
+    "angle": ("Angle", 0, 360, 0, 1.0, "\u00b0"),
+    "count": ("Count", 1, 400, 0, 1.0, ""),
+    "size": ("Size", 1, 100, 0, 100.0, "%"),
+    "scale": ("Scale", 5, 200, 0, 100.0, "%"),
+    "spacing": ("Spacing", 0.1, 5, 2, 100.0, "%"),
+    "width": ("Width", 0.1, 5, 2, 1000.0, "%"),
+    "inset": ("Inset", 0, 20, 1, 100.0, "%"),
+    "x": ("X", 0, 100, 0, 100.0, "%"),
+    "y": ("Y", 0, 100, 0, 100.0, "%"),
+}
+
 
 def _clear(layout) -> None:
     while layout.count():
         item = layout.takeAt(0)
         widget = item.widget()
         if widget is not None:
+            widget.setParent(None)
             widget.deleteLater()
             continue
         child = item.layout()
@@ -205,6 +226,8 @@ class Inspector(QWidget):
             self._shape_section(layer)
         elif isinstance(layer, IconLayer):
             self._icon_section(layer)
+        elif isinstance(layer, EmojiLayer):
+            self._emoji_section(layer)
         elif isinstance(layer, ImageLayer):
             self._image_section(layer)
         self.layer_layout.addStretch(1)
@@ -262,6 +285,8 @@ class Inspector(QWidget):
         self.kind_note.setObjectName("hint")
         if isinstance(layer, TextLayer):
             self.kind_note.setText(f"{layer.size * 100:.1f}% type")
+        elif isinstance(layer, EmojiLayer):
+            self.kind_note.setText(emojis.label(layer.char))
         elif isinstance(layer, ImageLayer):
             self.kind_note.setText(asset_name(self.design().assets, layer.asset_id))
         row.addWidget(self.kind_note)
@@ -512,6 +537,11 @@ class Inspector(QWidget):
             lambda key: self._apply("Change shape", f"shape-{layer.id}",
                                     lambda: setattr(layer, "shape", key)))
         self._labeled(self.layer_layout, "Form", shape)
+        browse = QPushButton("Browse all shapes\u2026")
+        browse.setObjectName("chip")
+        browse.setToolTip("Open the searchable shape picker")
+        browse.clicked.connect(lambda: self._browse_shape(layer))
+        self.layer_layout.addWidget(browse)
         self._fill_controls(layer, self.layer_layout)
         outline_on = self._check("Outline", bool(layer.stroke),
                                  lambda checked: self._apply(
@@ -546,7 +576,164 @@ class Inspector(QWidget):
             lambda key: self._apply("Change icon", f"icon-{layer.id}",
                                     lambda: setattr(layer, "icon", key)))
         self._labeled(self.layer_layout, "Glyph", icon)
+        browse = QPushButton("Browse all icons\u2026")
+        browse.setObjectName("chip")
+        browse.setToolTip("Open the searchable icon picker")
+        browse.clicked.connect(lambda: self._browse_icon(layer))
+        self.layer_layout.addWidget(browse)
         self._fill_controls(layer, self.layer_layout, "color")
+
+    def _retitle_swapped(self, layer, old_label: str, label: str) -> None:
+        """Keep auto-generated layer names in step when the art is swapped."""
+        if label and layer.name in (old_label, ""):
+            layer.name = self.design().unique_name(label)
+
+    def _browse_shape(self, layer: ShapeLayer) -> None:
+        key = pick_glyph("shape", self, layer.shape)
+        if key and key != layer.shape:
+            old = geometry.shape_label(layer.shape)
+            label = geometry.shape_label(key)
+
+            def change() -> None:
+                layer.shape = key
+                self._retitle_swapped(layer, old, label)
+
+            self._apply("Change shape", f"shape-{layer.id}", change)
+            QTimer.singleShot(0, self.refresh)
+
+    def _browse_icon(self, layer: IconLayer) -> None:
+        key = pick_glyph("icon", self, layer.icon)
+        if key and key != layer.icon:
+            old = geometry.icon_label(layer.icon)
+            label = geometry.icon_label(key)
+
+            def change() -> None:
+                layer.icon = key
+                self._retitle_swapped(layer, old, label)
+
+            self._apply("Change icon", f"icon-{layer.id}", change)
+            QTimer.singleShot(0, self.refresh)
+
+    def _browse_emoji(self, layer: EmojiLayer) -> None:
+        char = pick_glyph("emoji", self, layer.char)
+        if char and char != layer.char:
+            old = emojis.label(layer.char)
+            label = emojis.label(char)
+
+            def change() -> None:
+                layer.char = char
+                emojis.remember(char)
+                self._retitle_swapped(layer, old, label)
+
+            self._apply("Change emoji", f"emoji-{layer.id}", change)
+            QTimer.singleShot(0, self.refresh)
+
+    def _emoji_section(self, layer: EmojiLayer) -> None:
+        self._section(self.layer_layout, "Emoji")
+        preview_row = QHBoxLayout()
+        preview_row.setSpacing(10)
+        preview = QLabel()
+        preview.setPixmap(draw_emoji_icon(layer.char, 46, layer.color)
+                          .pixmap(46, 46))
+        preview.setFixedSize(46, 46)
+        preview_row.addWidget(preview)
+        text_box = QVBoxLayout()
+        text_box.setSpacing(0)
+        name = QLabel(emojis.label(layer.char))
+        name.setObjectName("heading")
+        text_box.addWidget(name)
+        item = emojis.get(layer.char)
+        category = item.category if item else "Emoji"
+        note = QLabel(f"{layer.char}  \u00b7  {category}")
+        note.setObjectName("hint")
+        text_box.addWidget(note)
+        preview_row.addLayout(text_box, 1)
+        self.layer_layout.addLayout(preview_row)
+
+        buttons = QHBoxLayout()
+        buttons.setSpacing(4)
+        browse = QPushButton("Browse\u2026")
+        browse.setObjectName("chip")
+        browse.setToolTip("Search the full emoji library")
+        browse.clicked.connect(lambda: self._browse_emoji(layer))
+        buttons.addWidget(browse)
+        shuffle = QPushButton("Shuffle")
+        shuffle.setObjectName("chip")
+        shuffle.setToolTip("Swap in a random emoji")
+        shuffle.clicked.connect(lambda: self._shuffle_emoji(layer))
+        buttons.addWidget(shuffle)
+        buttons.addStretch(1)
+        self.layer_layout.addLayout(buttons)
+
+        recent = emojis.recent(10)
+        if recent:
+            self.layer_layout.addWidget(muted("Recent", False))
+            grid = IconGrid([(item.char, item.name) for item in recent],
+                            kind="emoji", columns=8, icon_size=24)
+            grid.chosen.connect(lambda char: self._use_recent_emoji(layer, char))
+            self.layer_layout.addWidget(grid)
+
+        tint_on = self._check("Tint the glyph", bool(layer.color),
+                              lambda checked: self._set_emoji_tint(layer, checked))
+        self.layer_layout.addWidget(tint_on)
+        tint = self._color_row(layer.color or "#ff7a3d",
+                               lambda value: self._set_emoji_tint_colour(
+                                   layer, value),
+                               "Tint colour")
+        tint.setEnabled(bool(layer.color))
+        tint_on.toggled.connect(tint.setEnabled)
+        self._labeled(self.layer_layout, "Tint", tint)
+        self.layer_layout.addWidget(hint(
+            "Leave tint off to keep the native colour glyph. Tinting turns "
+            "the emoji into a single-colour silhouette.", True))
+
+    def _set_emoji_tint(self, layer: EmojiLayer, checked: bool) -> None:
+        colour = (layer.color or "#ff7a3d") if checked else ""
+        if colour == layer.color:
+            return
+        self._apply("Tint emoji", f"emoji-tint-{layer.id}",
+                    lambda: setattr(layer, "color", colour))
+        QTimer.singleShot(0, self.refresh)
+
+    def _set_emoji_tint_colour(self, layer: EmojiLayer, value: str) -> None:
+        if value == layer.color:
+            return
+        self._apply("Emoji colour", f"emoji-colour-{layer.id}",
+                    lambda: setattr(layer, "color", value))
+        QTimer.singleShot(0, self.refresh)
+
+    def _use_recent_emoji(self, layer: EmojiLayer, char: str) -> None:
+        if not char or char == layer.char:
+            return
+        old = emojis.label(layer.char)
+        label = emojis.label(char)
+
+        def change() -> None:
+            layer.char = char
+            emojis.remember(char)
+            self._retitle_swapped(layer, old, label)
+
+        self._apply("Change emoji", f"emoji-{layer.id}-{char}", change)
+        QTimer.singleShot(0, self.refresh)
+
+    def _shuffle_emoji(self, layer: EmojiLayer) -> None:
+        import random
+
+        choices = [item.char for item in emojis.EMOJIS
+                   if item.char != layer.char]
+        if not choices:
+            return
+        char = random.choice(choices)
+        old = emojis.label(layer.char)
+        label = emojis.label(char)
+
+        def change() -> None:
+            layer.char = char
+            emojis.remember(char)
+            self._retitle_swapped(layer, old, label)
+
+        self._apply("Change emoji", f"emoji-{layer.id}-{char}", change)
+        QTimer.singleShot(0, self.refresh)
 
     # ---------------------------------------------------------------- text
     def _text_section(self, layer: TextLayer) -> None:
@@ -778,6 +965,14 @@ class Inspector(QWidget):
         layout.addWidget(self.size_info)
 
         self._section(layout, "Background")
+        self.bg_preset = QComboBox()
+        self.bg_preset.addItem("Custom background", "")
+        for preset in backgrounds.PRESETS:
+            self.bg_preset.addItem(
+                f"{preset.category}  \u00b7  {preset.name}", preset.key)
+        self.bg_preset.currentIndexChanged.connect(
+            self._background_preset_selected)
+        self._labeled(layout, "Preset", self.bg_preset)
         self.bg_help = hint(
             "Use Backgrounds in the Build rail for quick starts, or hide the "
             "background entirely here. Individual layers can also be hidden in "
@@ -841,6 +1036,20 @@ class Inspector(QWidget):
             lambda value: self._set_background("Vignette", "vignette",
                                                float(value) / 100.0))
         layout.addWidget(self.bg_vignette)
+        bg_actions = QHBoxLayout()
+        bg_actions.setSpacing(6)
+        self.bg_swap = QPushButton("Swap colours")
+        self.bg_swap.setObjectName("chip")
+        self.bg_swap.setToolTip("Exchange the two background colours")
+        self.bg_swap.clicked.connect(self._swap_background_colours)
+        bg_actions.addWidget(self.bg_swap)
+        bg_random = QPushButton("Randomise")
+        bg_random.setObjectName("chip")
+        bg_random.setToolTip("Apply a random background preset")
+        bg_random.clicked.connect(self._randomise_background)
+        bg_actions.addWidget(bg_random)
+        bg_actions.addStretch(1)
+        layout.addLayout(bg_actions)
 
         self._section(layout, "Overlays")
         layout.addWidget(hint(
@@ -849,6 +1058,7 @@ class Inspector(QWidget):
             "nothing, so old projects keep rendering exactly as before."))
         self.overlay_combo = QComboBox()
         self.overlay_combo.addItem("No overlay", "")
+        self.overlay_combo.addItem("Custom mix", "custom")
         for preset in overlays.PRESETS:
             self.overlay_combo.addItem(
                 f"{preset.category}  \u00b7  {preset.label}", preset.key)
@@ -858,6 +1068,26 @@ class Inspector(QWidget):
         self.overlay_info.setObjectName("hint")
         self.overlay_info.setWordWrap(True)
         layout.addWidget(self.overlay_info)
+
+        mix_row = QHBoxLayout()
+        mix_label = QLabel("Mix")
+        mix_label.setFixedWidth(64)
+        mix_label.setStyleSheet(f"color: {theme.TEXT_MUTED};")
+        mix_row.addWidget(mix_label)
+        self.overlay_part = QComboBox()
+        self.overlay_part.addItem("Choose a component\u2026", "")
+        for name, label in overlays.OVERLAY_LABELS.items():
+            self.overlay_part.addItem(label, name)
+        self.overlay_part.currentIndexChanged.connect(
+            lambda _index: self._rebuild_mix_controls())
+        mix_row.addWidget(self.overlay_part, 1)
+        layout.addLayout(mix_row)
+        self.overlay_mix = QWidget()
+        self.overlay_mix_layout = QVBoxLayout(self.overlay_mix)
+        self.overlay_mix_layout.setContentsMargins(0, 2, 0, 2)
+        self.overlay_mix_layout.setSpacing(5)
+        layout.addWidget(self.overlay_mix)
+
         clear_overlay = QPushButton("Clear overlays")
         clear_overlay.setObjectName("chip")
         clear_overlay.setToolTip(
@@ -902,6 +1132,39 @@ class Inspector(QWidget):
         self._set_background("Background style", "kind", kind)
         self._sync_canvas()
 
+    def _background_preset_selected(self, _index: int) -> None:
+        if self._loading:
+            return
+        key = str(self.bg_preset.currentData() or "")
+        if not key:
+            return
+        preset = backgrounds.get(key)
+        background = copy.deepcopy(preset.background)
+        self._apply("Background preset", f"bg-preset-{key}",
+                    lambda: setattr(self.design(), "background", background))
+        self._sync_canvas()
+
+    def _swap_background_colours(self) -> None:
+        if self._loading:
+            return
+        design = self.design()
+        background = layers.merge(layers.default_background(), design.background)
+        first = background.get("color", "#0a0a10")
+        background["color"] = background.get("color2", "#26123a")
+        background["color2"] = first
+        self._apply("Swap background colours", "bg-swap",
+                    lambda: setattr(design, "background", background))
+        self._sync_canvas()
+
+    def _randomise_background(self) -> None:
+        if self._loading:
+            return
+        preset = random.choice(backgrounds.PRESETS)
+        background = copy.deepcopy(preset.background)
+        self._apply("Randomise background", "bg-random",
+                    lambda: setattr(self.design(), "background", background))
+        self._sync_canvas()
+
     def _set_background(self, label: str, key: str, value) -> None:
         if self._loading:
             return
@@ -914,6 +1177,8 @@ class Inspector(QWidget):
             return
         key = str(self.overlay_combo.currentData() or "")
         design = self.design()
+        if key == "custom":
+            return
         if not key:
             self._apply("Clear overlays", "overlay-clear",
                         lambda: setattr(design, "overlays",
@@ -923,6 +1188,84 @@ class Inspector(QWidget):
             self._apply("Apply overlay", f"overlay-{key}",
                         lambda: setattr(design, "overlays", stack))
         self._sync_canvas()
+
+    def _overlay_stack(self) -> dict:
+        return layers.merge(overlays.default_stack(), self.design().overlays)
+
+    def _rebuild_mix_controls(self) -> None:
+        if not hasattr(self, "overlay_mix_layout"):
+            return
+        layout = self.overlay_mix_layout
+        _clear(layout)
+        name = (self.overlay_part.currentData()
+                if hasattr(self, "overlay_part") else "")
+        if not name:
+            layout.addWidget(hint(
+                "Pick a component to enable it and tune opacity, colour, "
+                "angle, size or count without changing the rest of the mix."))
+            return
+        stack = self._overlay_stack()
+        entry = dict(stack.get(name) or overlays.OVERLAY_DEFAULTS.get(name, {}))
+        pretty = overlays.OVERLAY_LABELS.get(name, name.replace("_", " ").title())
+        enabled = self._check(f"Enable {pretty}", bool(entry.get("enabled")),
+                              lambda checked, n=name: self._set_overlay_value(
+                                  n, "enabled", checked))
+        layout.addWidget(enabled)
+        if "color" in entry:
+            color = self._color_row(
+                str(entry.get("color") or "#ffffff"),
+                lambda value, n=name: self._set_overlay_value(n, "color", value),
+                f"{pretty} colour")
+            self._labeled(layout, "Colour", color)
+        for key, value in entry.items():
+            if key in ("enabled", "color"):
+                continue
+            spec = OVERLAY_PARAMS.get(key)
+            if spec is None:
+                continue
+            label, minimum, maximum, decimals, multiplier, suffix = spec
+            field = SliderField(label, minimum, maximum,
+                                float(value) * multiplier,
+                                decimals=decimals, suffix=suffix)
+            field.valueChanged.connect(
+                lambda shown, n=name, k=key, m=multiplier:
+                self._set_overlay_value(n, k, shown / m))
+            layout.addWidget(field)
+
+    def _set_overlay_value(self, name: str, key: str, value) -> None:
+        if self._loading:
+            return
+        design = self.design()
+        stack = layers.merge(overlays.default_stack(), design.overlays)
+        entry = dict(stack.get(name) or overlays.OVERLAY_DEFAULTS.get(name, {}))
+        entry[key] = int(round(value)) if key == "count" else value
+        stack[name] = entry
+        stack["preset"] = "custom" if overlays.any_enabled(stack) else ""
+        self._apply("Edit overlay component",
+                    f"overlay-{name}-{key}",
+                    lambda: setattr(design, "overlays", stack))
+        self._update_overlay_summary()
+
+    def _update_overlay_summary(self) -> None:
+        if not hasattr(self, "overlay_info"):
+            return
+        stack = self._overlay_stack()
+        active = overlays.any_enabled(stack)
+        key = str(stack.get("preset") or "")
+        if not active:
+            key = ""
+        elif overlays.get(key) is None:
+            key = "custom"
+        index = self.overlay_combo.findData(key)
+        if index < 0:
+            index = 0
+        was = self._loading
+        self._loading = True
+        self.overlay_combo.setCurrentIndex(index)
+        self.overlay_info.setText(
+            f"Active: {overlays.describe(stack)}" if active
+            else "No overlay - the canvas renders exactly as saved.")
+        self._loading = was
 
     def _clear_overlays(self) -> None:
         if self._loading:
@@ -986,6 +1329,15 @@ class Inspector(QWidget):
             f"{design.width:,} \u00d7 {design.height:,} px  \u00b7  "
             f"{design.preset.ratio_label}  \u00b7  {len(design.layers)} layers")
         background = layers.merge(layers.default_background(), design.background)
+        preset_key = ""
+        for preset in backgrounds.PRESETS:
+            if all(background.get(name) == value
+                   for name, value in preset.background.items()):
+                preset_key = preset.key
+                break
+        preset_index = self.bg_preset.findData(preset_key)
+        if preset_index >= 0:
+            self.bg_preset.setCurrentIndex(preset_index)
         kind = background.get("kind", "linear")
         box_index = self.bg_kind.findData(kind)
         if box_index >= 0:
@@ -1004,6 +1356,10 @@ class Inspector(QWidget):
         self.bg_vignette.set_value(float(background.get("vignette", 0.25)) * 100)
         stack = layers.merge(overlays.default_stack(), design.overlays)
         overlay_key = str(stack.get("preset") or "")
+        if not overlays.any_enabled(stack):
+            overlay_key = ""
+        elif overlays.get(overlay_key) is None:
+            overlay_key = "custom"
         overlay_index = self.overlay_combo.findData(overlay_key)
         if overlay_index < 0:
             overlay_index = 0
@@ -1011,6 +1367,7 @@ class Inspector(QWidget):
         self.overlay_info.setText(
             f"Active: {overlays.describe(stack)}" if overlays.any_enabled(stack)
             else "No overlay - the canvas renders exactly as saved.")
+        self._rebuild_mix_controls()
         image_id = background.get("asset_id", "")
         self.bg_image_name.setText(
             asset_name(design.assets, image_id) if image_id else "No image")
@@ -1022,6 +1379,7 @@ class Inspector(QWidget):
         self.bg_color2.setEnabled(kind in ("linear", "radial"))
         self.bg_angle.setEnabled(kind == "linear")
         self.bg_image_row.setVisible(kind == "image")
+        self.bg_swap.setEnabled(kind in ("linear", "radial", "solid"))
         self.bg_pattern.setEnabled(kind != "transparent")
         self.bg_pattern_color.setEnabled(kind != "transparent")
         self.bg_pattern_opacity.setEnabled(kind != "transparent")

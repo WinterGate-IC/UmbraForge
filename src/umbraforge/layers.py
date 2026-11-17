@@ -334,6 +334,31 @@ class IconLayer(Layer):
 
 
 @dataclass
+class EmojiLayer(Layer):
+    """A single emoji glyph, stored as text so it stays tiny and searchable."""
+
+    kind: ClassVar[str] = "emoji"
+    name: str = "Emoji"
+    char: str = "\U0001F600"     # 😀
+    color: str = ""               # empty keeps the native colour glyph
+
+    def payload(self) -> dict:
+        return {"char": self.char, "color": self.color}
+
+    def load_payload(self, data: dict) -> None:
+        self.char = str(data.get("char") or "\U0001F600")[:8]
+        self.color = str(data.get("color") or "")
+
+    def describe(self) -> str:
+        from . import emojis
+
+        label = emojis.label(self.char)
+        if self.name in ("", "Emoji", label):
+            return label
+        return f"{self.name} \u00b7 {label}"
+
+
+@dataclass
 class TextLayer(Layer):
     kind: ClassVar[str] = "text"
     name: str = "Text"
@@ -419,6 +444,7 @@ class ImageLayer(Layer):
 LAYER_TYPES: dict[str, type[Layer]] = {
     "shape": ShapeLayer,
     "icon": IconLayer,
+    "emoji": EmojiLayer,
     "text": TextLayer,
     "image": ImageLayer,
 }

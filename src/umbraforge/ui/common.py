@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import geometry, theme
+from .. import emojis, geometry, theme
 
 
 def caption(text: str) -> QLabel:
@@ -287,7 +287,37 @@ def draw_shape_icon(kind: str, size: int = 28, color: str = theme.TEXT_MUTED) ->
     return QIcon(pixmap)
 
 
-def draw_layer_icon(kind: str, size: int = 26, color: str = theme.TEXT_MUTED) -> QIcon:
+def draw_emoji_icon(char: str, size: int = 28, color: str = "") -> QIcon:
+    """Colour emoji icon, with a drawn fallback when no emoji font is present."""
+    from PySide6.QtGui import QImage
+
+    data = emojis.glyph_png(char or "\U0001F600", max(16, size * 2), color)
+    if data:
+        image = QImage.fromData(data, "PNG")
+        if not image.isNull():
+            return QIcon(QPixmap.fromImage(image.scaled(
+                size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)))
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(theme.ACCENT))
+    painter.drawEllipse(QRectF(size * 0.12, size * 0.12,
+                               size * 0.76, size * 0.76))
+    painter.setPen(QColor(theme.PANEL))
+    font = QFont("Segoe UI Emoji", int(size * 0.5))
+    painter.setFont(font)
+    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, char or "?")
+    painter.end()
+    return QIcon(pixmap)
+
+
+def draw_layer_icon(kind: str, size: int = 26, color: str = theme.TEXT_MUTED,
+                    char: str = "\U0001F600") -> QIcon:
+    if kind == "emoji":
+        return draw_emoji_icon(char, size)
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -357,6 +387,8 @@ class IconGrid(QWidget):
             button.setToolTip(label)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setIcon(draw_shape_icon(key, icon_size) if kind == "shape"
+                           else draw_emoji_icon(key, icon_size)
+                           if kind == "emoji"
                            else _icon_icon(key, icon_size))
             button.setIconSize(QSize(icon_size, icon_size))
             button.setStyleSheet(

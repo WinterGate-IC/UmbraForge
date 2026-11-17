@@ -25,7 +25,8 @@ from .. import theme
 from ..layers import Design, Layer
 from .common import caption, draw_layer_icon
 
-KIND_LABEL = {"shape": "Shape", "icon": "Icon", "text": "Text", "image": "Image"}
+KIND_LABEL = {"shape": "Shape", "icon": "Icon", "emoji": "Emoji",
+              "text": "Text", "image": "Image"}
 
 
 class LayersPanel(QWidget):
@@ -155,7 +156,8 @@ class LayersPanel(QWidget):
 
     def _icon(self, layer: Layer) -> QIcon:
         color = theme.TEXT if layer.visible else theme.TEXT_DISABLED
-        icon = draw_layer_icon(layer.kind, 26, color)
+        icon = draw_layer_icon(layer.kind, 26, color,
+                               getattr(layer, "char", "\U0001F600"))
         if layer.locked:
             pixmap = icon.pixmap(26, 26)
             painter = QPainter(pixmap)

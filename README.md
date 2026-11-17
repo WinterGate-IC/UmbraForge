@@ -23,14 +23,21 @@ logos. Forks are welcome but must use their own name - see
   16:9, mobile wallpaper, banners, posters, stories, link cards and custom
   sizes. Layers are stored as fractions of the canvas, so switching preset
   reflows the art instead of cropping it.
-- **Layered emblem building** with 141 vector shapes, 157 SVG icons, 28 type
-  styles, a large installed-font shelf, images, effects, blend modes and
-  stacking controls. Build crests, badges and social-club emblems from parts.
+- **Layered emblem building** with 141 vector shapes, 157 SVG icons, **885
+  colour emoji across nine categories**, 28 type styles, a large installed-font
+  shelf, images, effects, blend modes and stacking controls. Any shape, icon or
+  emoji can be swapped in place from the Build rail, the inspector or the
+  right-click menu. Build crests, badges and social-club emblems from parts.
+- **A searchable emoji library** with Smileys, People, Nature, Food, Activity,
+  Travel, Objects, Symbols and Flags shelves, keyword search, recents, a
+  **Surprise me** button and a full-screen picker. Emoji are editable layers:
+  move, resize, rotate, tint, blend, mask and add effects like anything else.
 - **37 editable background presets** across ten categories for instant starts -
   forge-lit violet, ember haze, starfield, ocean grid, hex mesh, aurora waves,
   forest floor, risograph, synth sunset, scanlines and more - applied as
   ordinary `design.background` values you can still recolour, repattern or
-  switch to transparent in the Canvas tab.
+  switch to transparent in the Canvas tab, with preset, colour-swap and
+  randomise controls right in the inspector.
 - **36 editable templates** grouped by category, from wallpapers, social cards
   and posters to a whole **Meme** shelf (top/bottom, no/yes, expanding brain,
   deep fried, galaxy brain) and a **Propaganda** shelf (Rise, Unite, Victory,
@@ -38,8 +45,10 @@ logos. Forks are welcome but must use their own name - see
 - **A 43-preset Overlays library** that sits above the whole canvas: film grain,
   light leaks, lens flares, bokeh, holo and prism washes, rain, snow, embers,
   sparkles, confetti, halftone, grids, scanlines, VHS bars, frames, corner
-  marks, paper and vignettes. Overlays are non-destructive, editable from the
-  Canvas tab and a cleared stack is a pixel-identical no-op.
+  marks, paper and vignettes. Overlays are non-destructive and editable from the
+  Canvas tab, where a **mixer** enables any of the 23 primitives and tunes its
+  opacity, colour, angle, size or count independently. A cleared stack is a
+  pixel-identical no-op.
 - **Background removal** in three flavours:
   - *Auto* samples the border and flood-fills only connected pixels, so a
     subject that shares a colour with the background survives.
@@ -101,8 +110,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.4-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.4.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.5-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.5.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -181,15 +190,20 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
    around, or start fresh with **New design**.
 2. Choose a canvas preset and either a blank sheet or a template.
 3. Add parts from the left rail: **Start** (templates, projects and blank),
-   **Backgrounds** (12 ready-made presets with live previews), **Shapes**,
-   **Icons**, **Text**, **Fonts** and **Images**. The **Text** tab has an
-   **Add text** button (also on the top bar, in the **Edit** menu, and on the
-   canvas right-click menu); **Ctrl+T** works anywhere.
+   **Backgrounds** (37 ready-made presets with live previews), **Overlays**,
+   **Shapes**, **Icons**, **Emoji**, **Effects**, **Text**, **Fonts** and
+   **Images**. The **Text** tab has an **Add text** button (also on the top bar,
+   in the **Edit** menu, and on the canvas right-click menu); **Ctrl+T** works
+   anywhere. **Emoji** adds a colour glyph; the top-bar **Emoji** button and
+   **Ctrl+Shift+E** open the full picker.
 4. Select a layer on the canvas or in the layer stack to edit it in the right
-   rail: geometry, fill, effects, blend mode, text, image adjustments, masks
-   and background removal.
-5. Use the **Canvas** tab in the inspector to change size, gradient, pattern
-   and vignette.
+   rail: geometry, fill, effects, blend mode, text, emoji tint, image
+   adjustments, masks and background removal. Shapes, icons and emoji also have
+   a **Browse** button for swapping the art without losing position, size,
+   rotation or effects.
+5. Use the **Canvas** tab in the inspector to change size, background preset,
+   gradient, pattern, vignette, overlay recipe and individual overlay
+   components.
 6. Press **Save** when it looks right. The same dialog writes a flat image
    (PNG first) or an editable `.umbra` project. By default a flat save also
    writes the paired `.umbra` beside it, so every save can be reopened.
@@ -212,6 +226,8 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 | Snap | Automatic to canvas centre and other layers, with guides |
 | Add text | **Ctrl+T**, the **Text** button, **Edit > Add text**, or the empty-canvas right-click menu |
 | Edit text | **F2**, **Edit > Edit text**, the canvas right-click menu, or double-click a text layer |
+| Add emoji | **Ctrl+Shift+E**, the **Emoji** button, **Edit > Add emoji**, or the empty-canvas right-click menu |
+| Swap shape / icon / emoji | Select the layer, then use **Change shape/icon/emoji…** in the right-click menu, **Browse** in the inspector, or tick **Swap selected** in the Build rail |
 
 ### Shortcuts
 
@@ -224,6 +240,7 @@ After an editable install (`pip install -e .`) the `umbraforge` command and
 | **Ctrl+I** | Import image |
 | **Ctrl+Shift+I** | Import layers from another project |
 | **Ctrl+T** | Add a text layer |
+| **Ctrl+Shift+E** | Open the emoji picker and add the chosen emoji |
 | **F2** | Edit the selected text layer |
 | **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / Redo |
 | **Ctrl+D** | Duplicate layer |
@@ -293,23 +310,28 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.4",
+  "saved_with": "UmbraForge 0.1.5",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
   "height": 1200,
   "background": { "kind": "radial", "...": "..." },
-  "layers": [ { "kind": "shape", "x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8 } ],
+  "layers": [
+    { "kind": "shape", "x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8 },
+    { "kind": "emoji", "char": "\ud83d\udd25", "color": "#ff7a3d", "x": 0.4, "y": 0.4, "w": 0.2, "h": 0.2 }
+  ],
   "assets": { "<sha1>": { "name": "photo.png", "mime": "image/png", "data": "..." } },
   "selected": "<layer id>"
 }
 ```
 
 Geometry is normalized (`0..1` of canvas width/height). Images are base64
-encoded inside the document, so projects are self-contained. Unknown layer
-kinds are skipped on load rather than breaking the file. A newer format version
-is refused with a clear message instead of being half-read. Saves are written
-atomically, so an interrupted save cannot destroy the previous project.
+encoded inside the document, so projects are self-contained. Emoji layers store
+a Unicode `char` and an optional tint `color`, which keeps them tiny and lets
+them use every transform and effect. Unknown layer kinds are skipped on load
+rather than breaking the file. A newer format version is refused with a clear
+message instead of being half-read. Saves are written atomically, so an
+interrupted save cannot destroy the previous project.
 
 ## Tests
 
@@ -319,9 +341,10 @@ atomically, so an interrupted save cannot destroy the previous project.
 
 The suite covers presets, the document model, serialization, project headers,
 project merging, assets, undo, vector geometry, fonts, type styles, the render
-pipeline, templates, cutout maths, raster and icon helpers, background preset
-rendering and rail thumbnails, paired project saves, the Saves menu, the
-unified save dialog and an offscreen UI smoke test. Tests run headless with
+pipeline, templates, the emoji catalogue and glyph rendering, cutout maths,
+raster and icon helpers, background presets and the Canvas editing controls,
+rail thumbnails, paired project saves, the Saves menu, the unified save dialog
+and an offscreen UI smoke test. Tests run headless with
 `QT_QPA_PLATFORM=offscreen` (set automatically in `tests/conftest.py`).
 
 ## Build the release
@@ -374,6 +397,7 @@ umbraforge/
 │  ├─ layers.py            document model, assets, project files, undo
 │  ├─ geometry.py          vector shapes and icons
 │  ├─ icon_shelf.py        the SVG icon table
+│  ├─ emojis.py            the categorised emoji catalogue and glyph cache
 │  ├─ fonts.py             installed-font discovery and the font shelf
 │  ├─ text_styles.py       named type recipes
 │  ├─ imaging.py           Pillow/NumPy helpers and Qt bridges
@@ -388,11 +412,34 @@ umbraforge/
 
 ## Status
 
-Version 0.1.4 is the current Windows release. It ships as one timestamped
+Version 0.1.5 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
+
+What changed in 0.1.5:
+
+- **Emoji** is a new Build section with **885 emoji in nine categories**,
+  category filters, keyword search, a **Recent** shelf and a **Surprise me**
+  button, plus a full picker on **Ctrl+Shift+E** and the top bar;
+- emoji are real layers (`EmojiLayer`): native colour glyphs or a single-colour
+  tint, with the same position, size, rotation, opacity, blend, flip and effect
+  controls as every other layer;
+- shapes, icons and emoji can now be **swapped in place**: tick **Swap
+  selected** in the Build rail, use **Browse** in the inspector, or pick
+  **Change shape/icon/emoji…** from the canvas right-click menu;
+- the **Canvas** tab can apply any of the 37 background presets, swap the two
+  background colours and randomise the background without opening the Build
+  rail;
+- a new **overlay mixer** enables and tunes any of the 23 overlay primitives -
+  opacity, colour, angle, size, count, position and more - one component at a
+  time, and switches the recipe to **Custom mix** automatically;
+- the emoji catalogue stays Qt-free and renders through Pillow's colour-emoji
+  path, so every glyph is crisp at any canvas size and falls back to text when
+  no colour font exists;
+- `.umbra` files gain an optional `emoji` layer kind; older projects load
+  unchanged, and an emoji-free file renders exactly as before.
 
 What changed in 0.1.4:
 

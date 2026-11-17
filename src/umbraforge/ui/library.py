@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QFrame,
     QGridLayout,
@@ -25,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import (backgrounds, branding, cutout, effects, fonts, geometry,
+from .. import (backgrounds, branding, cutout, effects, emojis, fonts, geometry,
                 overlays, renderer, templates, text_styles, theme)
 from ..layers import Design, asset_name, asset_bytes
 from .common import (
@@ -145,6 +146,10 @@ class LibraryPanel(QWidget):
     recentProject = Signal(str)
     addShape = Signal(str)
     addIcon = Signal(str)
+    addEmoji = Signal(str)
+    swapShape = Signal(str)
+    swapIcon = Signal(str)
+    swapEmoji = Signal(str)
     addText = Signal(str)
     addAsset = Signal(str)
     importImage = Signal()
@@ -189,6 +194,7 @@ class LibraryPanel(QWidget):
             ("Overlays", "Canvas-wide grain, light and texture", self._overlay_tab),
             ("Shapes", "Vector shapes", self._shape_tab),
             ("Icons", "SVG icons", self._icon_tab),
+            ("Emoji", "Colour emoji by category", self._emoji_tab),
             ("Effects", "Finishes, glows and texture", self._effect_tab),
             ("Text", "Add text and type styles", self._type_tab),
             ("Fonts", "Installed fonts", self._font_tab),
@@ -198,6 +204,9 @@ class LibraryPanel(QWidget):
         nav.setContentsMargins(0, 0, 0, 0)
         nav.setHorizontalSpacing(4)
         nav.setVerticalSpacing(4)
+        self._section_index = {label: index
+                               for index, (label, _tip, _factory)
+                               in enumerate(sections)}
         for index, (label, tip, factory) in enumerate(sections):
             self.pages.addWidget(factory())
             button = QToolButton()
@@ -245,20 +254,31 @@ class LibraryPanel(QWidget):
         button = self._section_group.button(index)
         if button is not None:
             button.setChecked(True)
-        if index == 6 and not getattr(self, "_effect_built", True):
+        if index == self._section_index.get("Effects") and not getattr(
+                self, "_effect_built", True):
             self._effect_built = True
             self._refresh_effect_list()
-        if index == 3 and not getattr(self, "_overlay_built", True):
+        if index == self._section_index.get("Overlays") and not getattr(
+                self, "_overlay_built", True):
             self._overlay_built = True
             self._refresh_overlay_list()
+        if index == self._section_index.get("Emoji") and not getattr(
+                self, "_emoji_built", True):
+            self._emoji_built = True
+            self._refresh_emoji_list()
         # Templates and backgrounds are expensive to preview, so build them
         # on first view instead of in every freshly opened window.
-        if index == 1 and hasattr(self, "_template_timer"):
+        if index == self._section_index.get("Templates") and hasattr(
+                self, "_template_timer"):
             if not self._template_built and not self._template_timer.isActive():
                 self._template_timer.start(0)
-        if index == 2 and hasattr(self, "_bg_timer"):
+        if index == self._section_index.get("Backgrounds") and hasattr(
+                self, "_bg_timer"):
             if not self._bg_built and not self._bg_timer.isActive():
                 self._bg_timer.start(0)
+        page = self.pages.widget(index)
+        area = page if isinstance(page, QScrollArea) else page.findChild(QScrollArea)
+        self._fit_scroll(area)
 
     def current_section(self) -> int:
         return self.pages.currentIndex()
@@ -277,8 +297,42 @@ class LibraryPanel(QWidget):
         area.setWidget(body)
         return area, body, layout
 
+    @classmethod
+    def _fit_scroll(cls, area: QScrollArea | None, defer: bool = True) -> None:
+        """Grow a lazily filled scroll body so its content stays reachable.
+
+        ``QScrollArea`` sizes its widget when the area or the page changes,
+        not when widgets are inserted later. Sections built on first view
+        (templates, overlays, effects and emoji) filled the page after that
+        point, so their bodies kept the viewport height and everything below
+        the fold was unreachable. Resizing the body to its layout hint adds
+        the missing scroll range without forcing an eager build.
+
+        Qt re-applies the viewport size when a page is first shown, which can
+        undo a resize made while the section is still being activated, so the
+        fit is repeated once on the next event-loop turn.
+        """
+        if area is None:
+            return
+        body = area.widget()
+        if body is None or body.layout() is None:
+            return
+        height = body.layout().sizeHint().height()
+        target = max(area.viewport().height(), height)
+        if body.height() != target:
+            body.resize(body.width(), target)
+            if defer:
+                def settle() -> None:
+                    try:
+                        cls._fit_scroll(area, defer=False)
+                    except RuntimeError:  # area was deleted before the timer ran
+                        pass
+
+                QTimer.singleShot(0, settle)
+
     def _start_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._start_area = area
         layout.addWidget(muted("Start from a design, then make it yours.", True))
         blank = QPushButton("Blank canvas")
         blank.setObjectName("primary")
@@ -341,6 +395,7 @@ class LibraryPanel(QWidget):
 
     def _template_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._template_area = area
         layout.addWidget(muted(
             "Every template is a complete, editable design. Pick one, then "
             "recolour, retype or delete any part of it.", True))
@@ -389,9 +444,11 @@ class LibraryPanel(QWidget):
         if hasattr(self, "_template_empty"):
             shown = any(card.isVisible() for card in self._template_cards)
             self._template_empty.setVisible(not shown)
+        self._fit_scroll(getattr(self, "_template_area", None))
 
     def _background_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._background_area = area
         layout.addWidget(muted(
             "Drop in a base background, then add text, shapes or images on top. "
             "Nothing is forced - backgrounds are optional.", True))
@@ -426,6 +483,7 @@ class LibraryPanel(QWidget):
         self._bg_thumb_queue = list(self._bg_cards)
         if self._bg_thumb_queue:
             self._bg_thumb_timer.start(16)
+        self._fit_scroll(self._background_area)
 
     def _render_next_bg_thumb(self) -> None:
         if not self._bg_thumb_queue:
@@ -447,6 +505,7 @@ class LibraryPanel(QWidget):
     # --------------------------------------------------------------- overlays
     def _overlay_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._overlay_area = area
         layout.addWidget(muted(
             "Overlays sit above the whole canvas: grain, light leaks, "
             "halftone, frames and weather. They never change your layers, and "
@@ -501,6 +560,7 @@ class LibraryPanel(QWidget):
             empty = hint("No overlays match that filter.")
             layout.insertWidget(layout.count() - 2, empty)
             self._overlay_cards.append(empty)
+            self._fit_scroll(self._overlay_area)
             return
         grouped = category in ("", "All overlays") and not needle
         current = None
@@ -544,6 +604,7 @@ class LibraryPanel(QWidget):
                     Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             layout.insertWidget(layout.count() - 2, card)
             self._overlay_cards.append(card)
+        self._fit_scroll(self._overlay_area)
 
     def _resume_last(self) -> None:
         if self._resume_target is not None:
@@ -608,9 +669,11 @@ class LibraryPanel(QWidget):
                     Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             self._recent_box.addWidget(card)
             self._recent_widgets.append(card)
+        self._fit_scroll(self._start_area)
 
     def _shape_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._shape_area = area
         layout.addWidget(muted("Click a shape to add it at the centre of the canvas.", True))
         self._shape_filter = QLineEdit()
         self._shape_filter.setPlaceholderText("Search shapes\u2026")
@@ -624,20 +687,42 @@ class LibraryPanel(QWidget):
         self._shape_category.currentTextChanged.connect(
             lambda _t: self._refresh_shape_list())
         layout.addWidget(self._shape_category)
+        self._shape_swap = QCheckBox("Swap selected")
+        self._shape_swap.setToolTip(
+            "Click a shape to swap the selected shape layer's art instead of "
+            "adding a new layer")
+        layout.addWidget(self._shape_swap)
         self._shape_grids: list[tuple[QLabel, IconGrid]] = []
+        self._shape_empty: QWidget | None = None
+        self._shape_tail: QWidget | None = None
         self._shape_layout = layout
         self._refresh_shape_list()
         layout.addStretch(1)
         return area
 
+    def _shape_chosen(self, key: str) -> None:
+        if self._shape_swap.isChecked():
+            self.swapShape.emit(key)
+        else:
+            self.addShape.emit(key)
+
     def _refresh_shape_list(self) -> None:
         if not hasattr(self, "_shape_layout") or not hasattr(self, "_shape_grids"):
             return
         layout = self._shape_layout
+        if self._shape_empty is not None:
+            self._shape_empty.setParent(None)
+            self._shape_empty.deleteLater()
+            self._shape_empty = None
+        if self._shape_tail is not None:
+            self._shape_tail.setParent(None)
+            self._shape_tail.deleteLater()
+            self._shape_tail = None
         for label, grid in self._shape_grids:
-            label.setParent(None)
+            if label is not None:
+                label.setParent(None)
+                label.deleteLater()
             grid.setParent(None)
-            label.deleteLater()
             grid.deleteLater()
         self._shape_grids = []
         needle = self._shape_filter.text().strip() if hasattr(self, "_shape_filter") else ""
@@ -646,34 +731,37 @@ class LibraryPanel(QWidget):
         cat_filter = None if category in ("", "All shapes") else category
         entries = geometry.shape_entries(cat_filter, needle)
         if not entries:
-            layout.insertWidget(layout.count() - 1, hint("No shapes match that filter."))
+            self._shape_empty = hint("No shapes match that filter.")
+            layout.insertWidget(layout.count() - 1, self._shape_empty)
+            self._fit_scroll(self._shape_area)
             return
         if category in ("", "All shapes") and not needle:
             for cat in geometry.shape_categories():
                 cat_entries = geometry.shape_entries(cat)
                 if not cat_entries:
                     continue
-                layout.insertWidget(layout.count() - 1, caption(cat))
+                cat_label = caption(cat)
+                layout.insertWidget(layout.count() - 1, cat_label)
                 grid = IconGrid(cat_entries, kind="shape", columns=6, icon_size=26)
-                grid.chosen.connect(self.addShape.emit)
+                grid.chosen.connect(self._shape_chosen)
                 layout.insertWidget(layout.count() - 1, grid)
-                label_w = layout.itemAt(layout.count()-2).widget()
-                if isinstance(label_w, QLabel):
-                    self._shape_grids.append((label_w, grid))
-                else:
-                    self._shape_grids.append((None, grid))
+                self._shape_grids.append((cat_label, grid))
             hint_w = hint("Shapes are vector paths: no pixelation when you export.")
             layout.insertWidget(layout.count() - 1, hint_w)
+            self._shape_tail = hint_w
         else:
             grid = IconGrid(entries, kind="shape", columns=6, icon_size=26)
-            grid.chosen.connect(self.addShape.emit)
+            grid.chosen.connect(self._shape_chosen)
             layout.insertWidget(layout.count() - 1, grid)
             self._shape_grids.append((None, grid))
             hint_w = hint("Shapes are vector paths: no pixelation when you export.")
             layout.insertWidget(layout.count() - 1, hint_w)
+            self._shape_tail = hint_w
+        self._fit_scroll(self._shape_area)
 
     def _icon_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._icon_area = area
         layout.addWidget(muted("Emblems, marks and symbols. All drawn as vectors.", True))
         self._icon_filter = QLineEdit()
         self._icon_filter.setPlaceholderText("Search icons\u2026")
@@ -687,16 +775,37 @@ class LibraryPanel(QWidget):
         self._icon_category.currentTextChanged.connect(
             lambda _t: self._refresh_icon_list())
         layout.addWidget(self._icon_category)
+        self._icon_swap = QCheckBox("Swap selected")
+        self._icon_swap.setToolTip(
+            "Click an icon to swap the selected icon layer's art instead of "
+            "adding a new layer")
+        layout.addWidget(self._icon_swap)
         self._icon_grids: list[tuple[QLabel | None, IconGrid]] = []
+        self._icon_empty: QWidget | None = None
+        self._icon_tail: QWidget | None = None
         self._icon_layout = layout
         self._refresh_icon_list()
         layout.addStretch(1)
         return area
 
+    def _icon_chosen(self, key: str) -> None:
+        if self._icon_swap.isChecked():
+            self.swapIcon.emit(key)
+        else:
+            self.addIcon.emit(key)
+
     def _refresh_icon_list(self) -> None:
         if not hasattr(self, "_icon_layout") or not hasattr(self, "_icon_grids"):
             return
         layout = self._icon_layout
+        if self._icon_empty is not None:
+            self._icon_empty.setParent(None)
+            self._icon_empty.deleteLater()
+            self._icon_empty = None
+        if self._icon_tail is not None:
+            self._icon_tail.setParent(None)
+            self._icon_tail.deleteLater()
+            self._icon_tail = None
         for label, grid in self._icon_grids:
             if label is not None:
                 label.setParent(None)
@@ -710,7 +819,9 @@ class LibraryPanel(QWidget):
         cat_filter = None if category in ("", "All icons") else category
         entries = geometry.icon_entries(cat_filter, needle)
         if not entries:
-            layout.insertWidget(layout.count() - 1, hint("No icons match that filter."))
+            self._icon_empty = hint("No icons match that filter.")
+            layout.insertWidget(layout.count() - 1, self._icon_empty)
+            self._fit_scroll(self._icon_area)
             return
         if category in ("", "All icons") and not needle:
             for cat in geometry.icon_categories():
@@ -720,21 +831,146 @@ class LibraryPanel(QWidget):
                 cat_label = caption(cat)
                 layout.insertWidget(layout.count() - 1, cat_label)
                 grid = IconGrid(cat_entries, kind="icon", columns=6, icon_size=26)
-                grid.chosen.connect(self.addIcon.emit)
+                grid.chosen.connect(self._icon_chosen)
                 layout.insertWidget(layout.count() - 1, grid)
                 self._icon_grids.append((cat_label, grid))
             hint_w = hint("Tip: put an icon inside a ring or shield for a crest.")
             layout.insertWidget(layout.count() - 1, hint_w)
+            self._icon_tail = hint_w
         else:
             grid = IconGrid(entries, kind="icon", columns=6, icon_size=26)
-            grid.chosen.connect(self.addIcon.emit)
+            grid.chosen.connect(self._icon_chosen)
             layout.insertWidget(layout.count() - 1, grid)
             self._icon_grids.append((None, grid))
             hint_w = hint("Tip: put an icon inside a ring or shield for a crest.")
             layout.insertWidget(layout.count() - 1, hint_w)
+            self._icon_tail = hint_w
+        self._fit_scroll(self._icon_area)
+
+    def _emoji_tab(self) -> QWidget:
+        area, _body, layout = self._scroll()
+        self._emoji_area = area
+        layout.addWidget(muted(
+            "Colour emoji, searchable by name or keyword. Click one to add it; "
+            "tint or resize it in the inspector.", True))
+        self._emoji_search = QLineEdit()
+        self._emoji_search.setPlaceholderText("Search emoji\u2026")
+        self._emoji_search.setClearButtonEnabled(True)
+        self._emoji_search.textChanged.connect(self._refresh_emoji_list)
+        layout.addWidget(self._emoji_search)
+        self._emoji_category = QComboBox()
+        self._emoji_category.addItem("All emoji")
+        self._emoji_category.addItem("Recent emoji")
+        for cat in emojis.categories():
+            self._emoji_category.addItem(cat)
+        self._emoji_category.currentTextChanged.connect(
+            lambda _t: self._refresh_emoji_list())
+        layout.addWidget(self._emoji_category)
+        surprise = QPushButton("Surprise me")
+        surprise.setObjectName("chip")
+        surprise.setToolTip("Add a random emoji")
+        surprise.clicked.connect(self._random_emoji)
+        layout.addWidget(surprise)
+        self._emoji_swap = QCheckBox("Swap selected")
+        self._emoji_swap.setToolTip(
+            "Click an emoji to swap the selected emoji layer instead of adding "
+            "a new layer")
+        layout.addWidget(self._emoji_swap)
+        self._emoji_cards: list[QWidget] = []
+        self._emoji_layout = layout
+        self._emoji_built = False
+        layout.addStretch(1)
+        return area
+
+    def _random_emoji(self) -> None:
+        import random
+
+        self._use_emoji(random.choice(emojis.EMOJIS).char)
+
+    def _use_emoji(self, char: str) -> None:
+        emojis.remember(char)
+        if self._emoji_swap.isChecked():
+            self.swapEmoji.emit(char)
+        else:
+            self.addEmoji.emit(char)
+
+    def _refresh_emoji_list(self) -> None:
+        if not hasattr(self, "_emoji_layout"):
+            return
+        layout = self._emoji_layout
+        for widget in self._emoji_cards:
+            widget.setParent(None)
+            widget.deleteLater()
+        self._emoji_cards = []
+        needle = (self._emoji_search.text().strip()
+                  if hasattr(self, "_emoji_search") else "")
+        category = (self._emoji_category.currentText()
+                    if hasattr(self, "_emoji_category") else "All emoji")
+        if category == "Recent emoji":
+            found = emojis.recent(30)
+            if not found:
+                empty = hint("No recent emoji yet. Pick one and it will appear "
+                             "here for quick reuse.")
+                layout.insertWidget(layout.count() - 1, empty)
+                self._emoji_cards.append(empty)
+                self._fit_scroll(self._emoji_area)
+                return
+            label = caption("Recent")
+            layout.insertWidget(layout.count() - 1, label)
+            self._emoji_cards.append(label)
+            grid = IconGrid([(item.char, item.name) for item in found],
+                            kind="emoji", columns=6, icon_size=28)
+            grid.chosen.connect(self._use_emoji)
+            layout.insertWidget(layout.count() - 1, grid)
+            self._emoji_cards.append(grid)
+        elif category in ("", "All emoji") and not needle:
+            recent = emojis.recent(14)
+            if recent:
+                label = caption("Recent")
+                layout.insertWidget(layout.count() - 1, label)
+                self._emoji_cards.append(label)
+                grid = IconGrid([(item.char, item.name) for item in recent],
+                                kind="emoji", columns=6, icon_size=28)
+                grid.chosen.connect(self._use_emoji)
+                layout.insertWidget(layout.count() - 1, grid)
+                self._emoji_cards.append(grid)
+            for cat in emojis.categories():
+                cat_entries = emojis.entries(cat)
+                if not cat_entries:
+                    continue
+                label = caption(f"{cat}  \u00b7  {len(cat_entries)}")
+                layout.insertWidget(layout.count() - 1, label)
+                self._emoji_cards.append(label)
+                grid = IconGrid([(item.char, item.name) for item in cat_entries],
+                                kind="emoji", columns=6, icon_size=28)
+                grid.chosen.connect(self._use_emoji)
+                layout.insertWidget(layout.count() - 1, grid)
+                self._emoji_cards.append(grid)
+        else:
+            cat_filter = None if category in ("", "All emoji") else category
+            found = emojis.entries(cat_filter, needle)
+            if not found:
+                empty = hint("No emoji match that filter.")
+                layout.insertWidget(layout.count() - 1, empty)
+                self._emoji_cards.append(empty)
+                return
+            label = caption(f"{len(found)} match{'es' if len(found) != 1 else ''}")
+            layout.insertWidget(layout.count() - 1, label)
+            self._emoji_cards.append(label)
+            grid = IconGrid([(item.char, item.name) for item in found],
+                            kind="emoji", columns=6, icon_size=28)
+            grid.chosen.connect(self._use_emoji)
+            layout.insertWidget(layout.count() - 1, grid)
+            self._emoji_cards.append(grid)
+        tail = hint(f"{len(emojis.EMOJIS)} emoji in {len(emojis.categories())} "
+                    "categories. Right-click a selected emoji layer for more.")
+        layout.insertWidget(layout.count() - 1, tail)
+        self._emoji_cards.append(tail)
+        self._fit_scroll(self._emoji_area)
 
     def _effect_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._effect_area = area
         layout.addWidget(muted(
             "Pick a finish for the selected layer. Effects are "
             "non-destructive: nothing is baked in until you export.", True))
@@ -795,6 +1031,7 @@ class LibraryPanel(QWidget):
             empty = hint("No effects match that filter.")
             layout.insertWidget(layout.count() - 2, empty)
             self._effect_cards.append(empty)
+            self._fit_scroll(self._effect_area)
             return
         grouped = category in ("", "All effects") and not needle
         current = None
@@ -838,6 +1075,7 @@ class LibraryPanel(QWidget):
                     Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             layout.insertWidget(layout.count() - 2, card)
             self._effect_cards.append(card)
+        self._fit_scroll(self._effect_area)
 
     def _type_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
@@ -885,6 +1123,7 @@ class LibraryPanel(QWidget):
 
     def _font_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._font_area = area
         layout.addWidget(muted("Preview the fonts installed on this machine. "
                                "Click one to apply it to the selected text "
                                "layer.", True))
@@ -942,6 +1181,7 @@ class LibraryPanel(QWidget):
             count += 1
         self._font_count.setText(
             f"{count} font{'s' if count != 1 else ''} on this device")
+        self._fit_scroll(self._font_area)
 
     def _pick_font(self, item: QListWidgetItem) -> None:
         family = item.data(Qt.ItemDataRole.UserRole)
@@ -950,6 +1190,7 @@ class LibraryPanel(QWidget):
 
     def _image_tab(self) -> QWidget:
         area, _body, layout = self._scroll()
+        self._image_area = area
         import_btn = QPushButton("Import an image\u2026")
         import_btn.setObjectName("primary")
         import_btn.clicked.connect(self.importImage.emit)
@@ -1056,6 +1297,7 @@ class LibraryPanel(QWidget):
                 child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             self.assets_box.addWidget(row)
             self._asset_widgets.append(row)
+        self._fit_scroll(getattr(self, "_image_area", None))
 
     def design(self) -> Design:
         return self._design()

@@ -32,7 +32,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from . import effects, geometry, imaging, layers, overlays
+from . import effects, emojis, geometry, imaging, layers, overlays
 
 _COMPOSITION = {
     "normal": QPainter.CompositionMode.CompositionMode_SourceOver,
@@ -52,10 +52,12 @@ _COMPOSITION = {
 _ASSET_CACHE: OrderedDict[str, QImage] = OrderedDict()
 _ADJUST_CACHE: OrderedDict[tuple, QImage] = OrderedDict()
 _LAYER_IMAGE_CACHE: OrderedDict[tuple, QImage] = OrderedDict()
+_GLYPH_CACHE: OrderedDict[tuple, QImage] = OrderedDict()
 _STYLED_CACHE: OrderedDict[str, QImage] = OrderedDict()
 _MAX_ASSETS = 24
 _MAX_ADJUSTED = 10
 _MAX_LAYER_IMAGES = 32
+_MAX_GLYPHS = 48
 _MAX_STYLED = 20
 
 
@@ -63,6 +65,7 @@ def clear_caches() -> None:
     _ASSET_CACHE.clear()
     _ADJUST_CACHE.clear()
     _LAYER_IMAGE_CACHE.clear()
+    _GLYPH_CACHE.clear()
     _STYLED_CACHE.clear()
 
 
@@ -488,6 +491,23 @@ def _layer_transform(painter: QPainter, layer: layers.Layer,
     return rect
 
 
+def emoji_glyph(char: str, size: int, color: str = "") -> QImage | None:
+    """Cached QImage for one emoji glyph rendered by Pillow."""
+    size = max(12, min(768, int(size)))
+    key = (char, size, color or "")
+    cached = _GLYPH_CACHE.get(key)
+    if cached is not None:
+        _GLYPH_CACHE.move_to_end(key)
+        return cached
+    data = emojis.glyph_png(char, size, color)
+    if not data:
+        return None
+    image = QImage.fromData(data, "PNG")
+    if image.isNull():
+        return None
+    return _remember(_GLYPH_CACHE, key, image, _MAX_GLYPHS)
+
+
 def _paint_content(painter: QPainter, design: layers.Design,
                    layer: layers.Layer, width: int, height: int) -> None:
     if isinstance(layer, layers.ShapeLayer):
@@ -519,6 +539,24 @@ def _paint_content(painter: QPainter, design: layers.Design,
                                          layer.gradient_angle)
                          if layer.gradient else QBrush(_color(layer.color)))
         painter.drawPath(path)
+    elif isinstance(layer, layers.EmojiLayer):
+        rect = QRectF(layer.x * width, layer.y * height,
+                      layer.w * width, layer.h * height)
+        side = max(1, min(rect.width(), rect.height()))
+        image = emoji_glyph(layer.char, int(round(side)), layer.color)
+        if image is None or image.isNull():
+            painter.save()
+            font = QFont("Segoe UI Emoji")
+            font.setPixelSize(max(1, int(round(rect.height() * 0.9))))
+            painter.setFont(font)
+            painter.setPen(_color(layer.color or "#ffffff"))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, layer.char)
+            painter.restore()
+            return
+        target = QRectF(rect.center().x() - side / 2.0,
+                        rect.center().y() - side / 2.0, side, side)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.drawImage(target, image)
     elif isinstance(layer, layers.TextLayer):
         rect = QRectF(layer.x * width, layer.y * height,
                       layer.w * width, layer.h * height)
@@ -662,7 +700,8 @@ def save_image(design: layers.Design, path: str, width: int | None = None,
                height: int | None = None, quality: int = 92,
                background: bool = True) -> bool:
     image = render_design(design, width, height, background=background)
-    suffix = str(path).lower().rsplit(".", 1)[-1]
+    target = str(path)
+    suffix = target.lower().rsplit(".", 1)[-1]
     fmt = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP",
            "bmp": "BMP", "tif": "TIFF", "tiff": "TIFF"}.get(suffix, "PNG")
     if fmt == "JPEG" and image.hasAlphaChannel() and not background:
@@ -673,8 +712,8 @@ def save_image(design: layers.Design, path: str, width: int | None = None,
         painter.end()
         image = flattened
     if fmt in ("JPEG", "WEBP"):
-        return image.save(path, fmt, int(max(10, min(100, quality))))
-    return image.save(path, fmt)
+        return image.save(target, fmt, int(max(10, min(100, quality))))
+    return image.save(target, fmt)
 
 
 def layer_at(design: layers.Design, x: float, y: float,

@@ -29,6 +29,7 @@ from .. import (
     backgrounds,
     branding,
     effects,
+    emojis,
     extensions,
     fonts,
     geometry,
@@ -42,6 +43,7 @@ from .. import (
 )
 from ..layers import (
     Design,
+    EmojiLayer,
     History,
     IconLayer,
     ImageLayer,
@@ -64,6 +66,7 @@ from .dialogs import (
 from .inspector import Inspector
 from .layers import LayersPanel
 from .library import LibraryPanel
+from .pickers import pick_glyph
 
 SHAPE_COLOURS = ("#ff7a3d", "#8b5cf6", "#63e6ff", "#d9b46a", "#f3f1f8", "#ff5c72")
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif",
@@ -136,6 +139,8 @@ class MainWindow(QMainWindow):
         self.act_lock = self._action("Lock layer", self._toggle_lock, ["Ctrl+L"])
         self.act_add_text = self._action("Add text", self._add_text_default,
                                          ["Ctrl+T"])
+        self.act_add_emoji = self._action("Add emoji\u2026", self._pick_emoji,
+                                          ["Ctrl+Shift+E"])
         self.act_edit_text = self._action("Edit text", self._edit_selected_text,
                                           ["F2"])
 
@@ -210,6 +215,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.act_lock)
         edit_menu.addSeparator()
         edit_menu.addAction(self.act_add_text)
+        edit_menu.addAction(self.act_add_emoji)
         edit_menu.addAction(self.act_edit_text)
 
         layer_menu = bar.addMenu("&Layer")
@@ -422,6 +428,9 @@ class MainWindow(QMainWindow):
         text = self._bar_button("Text", self.act_add_text, "ghost")
         text.setToolTip("Add an editable text layer and start typing  (Ctrl+T)")
         layout.addWidget(text)
+        emoji = self._bar_button("Emoji", self.act_add_emoji, "ghost")
+        emoji.setToolTip("Search the emoji library and add one  (Ctrl+Shift+E)")
+        layout.addWidget(emoji)
         save = self._bar_button("Save", self.act_save, "primary")
         save.setMinimumWidth(92)
         save.setToolTip("Save an image or the editable project - one flow, "
@@ -544,6 +553,10 @@ class MainWindow(QMainWindow):
         self.library_panel.recentProject.connect(self._open_path)
         self.library_panel.addShape.connect(self._add_shape)
         self.library_panel.addIcon.connect(self._add_icon)
+        self.library_panel.addEmoji.connect(self._add_emoji)
+        self.library_panel.swapShape.connect(self._swap_shape)
+        self.library_panel.swapIcon.connect(self._swap_icon)
+        self.library_panel.swapEmoji.connect(self._swap_emoji)
         self.library_panel.addText.connect(self._add_text)
         self.library_panel.addAsset.connect(self._add_asset)
         self.library_panel.importImage.connect(self._import_image)
@@ -1078,6 +1091,85 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         self._flash(f"Added {layer.name}.")
 
+    def _add_emoji(self, char: str) -> None:
+        design = self.design
+        width, height = self._square_size(0.22)
+        layer = EmojiLayer(
+            name=design.unique_name(emojis.label(char)), char=char,
+            x=0.5 - width / 2, y=0.5 - height / 2, w=width, h=height)
+        design.add(layer)
+        self._record("Add emoji", f"add-emoji-{layer.id}")
+        self._refresh_all()
+        self._flash(f"Added {emojis.label(char)}. Tint or resize it in the "
+                    "inspector.")
+
+    def _pick_emoji(self) -> None:
+        char = pick_glyph("emoji", self)
+        if char:
+            self._add_emoji(char)
+
+    def _swap_shape(self, key: str) -> None:
+        layer = self.design.active
+        if not isinstance(layer, ShapeLayer):
+            self._flash("Select a shape layer first, then pick a replacement.")
+            return
+        if layer.shape == key:
+            return
+        old = geometry.shape_label(layer.shape)
+        label = geometry.shape_label(key)
+        layer.shape = key
+        if layer.name in (old, ""):
+            layer.name = self.design.unique_name(label)
+        self._record("Change shape", f"swap-shape-{layer.id}-{key}")
+        self._refresh_all()
+        self._flash(f"Shape changed to {label}.")
+
+    def _swap_icon(self, key: str) -> None:
+        layer = self.design.active
+        if not isinstance(layer, IconLayer):
+            self._flash("Select an icon layer first, then pick a replacement.")
+            return
+        if layer.icon == key:
+            return
+        old = geometry.icon_label(layer.icon)
+        label = geometry.icon_label(key)
+        layer.icon = key
+        if layer.name in (old, ""):
+            layer.name = self.design.unique_name(label)
+        self._record("Change icon", f"swap-icon-{layer.id}-{key}")
+        self._refresh_all()
+        self._flash(f"Icon changed to {label}.")
+
+    def _swap_emoji(self, char: str) -> None:
+        layer = self.design.active
+        if not isinstance(layer, EmojiLayer):
+            self._flash("Select an emoji layer first, then pick a replacement.")
+            return
+        if layer.char == char:
+            return
+        old = emojis.label(layer.char)
+        label = emojis.label(char)
+        layer.char = char
+        emojis.remember(char)
+        if layer.name in (old, ""):
+            layer.name = self.design.unique_name(label)
+        self._record("Change emoji", f"swap-emoji-{layer.id}-{char}")
+        self._refresh_all()
+        self._flash(f"Emoji changed to {label}.")
+
+    def _change_glyph(self, layer, kind: str) -> None:
+        current = (layer.char if kind == "emoji"
+                   else layer.shape if kind == "shape" else layer.icon)
+        key = pick_glyph(kind, self, current)
+        if not key:
+            return
+        if kind == "shape":
+            self._swap_shape(key)
+        elif kind == "icon":
+            self._swap_icon(key)
+        else:
+            self._swap_emoji(key)
+
     def _add_text(self, style: str) -> None:
         spec = TEXT_PRESETS.get(style, TEXT_PRESETS["heading"])
         design = self.design
@@ -1376,11 +1468,21 @@ class MainWindow(QMainWindow):
                            self._toggle_lock)
             if isinstance(layer, TextLayer):
                 menu.addAction("Edit text", lambda: self._edit_text(layer.id))
+            if isinstance(layer, ShapeLayer):
+                menu.addAction("Change shape\u2026",
+                               lambda: self._change_glyph(layer, "shape"))
+            if isinstance(layer, IconLayer):
+                menu.addAction("Change icon\u2026",
+                               lambda: self._change_glyph(layer, "icon"))
+            if isinstance(layer, EmojiLayer):
+                menu.addAction("Change emoji\u2026",
+                               lambda: self._change_glyph(layer, "emoji"))
             if isinstance(layer, ImageLayer):
                 menu.addAction("Remove background\u2026",
                                lambda: self._remove_background(layer.id))
         else:
             menu.addAction("Add text", self.act_add_text)
+            menu.addAction("Add emoji\u2026", self.act_add_emoji)
             menu.addAction("New design\u2026", self._new)
             menu.addAction("Import image\u2026", self._import_image)
             menu.addAction("Fit to window", self._fit)
