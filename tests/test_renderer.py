@@ -238,3 +238,16 @@ def test_icon_layer_renders(qapp):
     design.add(IconLayer(name="Skull", icon="skull", x=0.2, y=0.2, w=0.6,
                          h=0.6, color="#ffffff"))
     assert alpha_map(renderer.render_design(design, 120, 120)).max() > 0
+
+
+def test_numeric_colour_values_still_render(qapp):
+    design = Design(width=120, height=120)
+    design.background["color"] = 5
+    design.background["color2"] = None
+    design.add(ShapeLayer(name="Odd", shape="circle", fill=5, fill2=[],
+                          stroke=7, gradient=True,
+                          x=0.2, y=0.2, w=0.6, h=0.6))
+    image = renderer.render_design(design, 120, 120)
+
+    assert not image.isNull()
+    assert alpha_map(image).max() > 0

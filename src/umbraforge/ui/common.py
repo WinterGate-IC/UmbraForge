@@ -128,7 +128,7 @@ class ColorButton(QPushButton):
         return self._color
 
     def set_color(self, color: str, emit: bool = False) -> None:
-        value = color or "#000000"
+        value = str(color or "#000000")
         if not QColor(value).isValid():
             value = "#000000"
         self._color = value

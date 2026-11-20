@@ -89,3 +89,24 @@ def test_old_files_without_emoji_or_mixer_still_load():
     assert design.layers[0].shape == "circle"
     assert design.background["color"] == "#000000"
     assert design.overlays["preset"] == "silent"
+
+def test_two_quick_canvas_presets_are_two_undo_steps(window):
+    from umbraforge import presets
+
+    inspector = window.inspector
+    design = window.design
+    window.history.reset()
+    before = (design.width, design.height)
+    first, second = presets.PRESETS[1], presets.PRESETS[2]
+
+    inspector.preset_combo.setCurrentIndex(
+        inspector.preset_combo.findData(first.key))
+    inspector.preset_combo.setCurrentIndex(
+        inspector.preset_combo.findData(second.key))
+    assert (design.width, design.height) == (second.width, second.height)
+    assert window.history.cursor == 2
+
+    window._undo()
+    assert (design.width, design.height) == (first.width, first.height)
+    window._undo()
+    assert (design.width, design.height) == before

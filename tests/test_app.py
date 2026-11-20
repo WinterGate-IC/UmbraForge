@@ -48,3 +48,36 @@ def test_help_and_version_short_circuit(qapp, capsys):
     assert app.main(["--help"]) == 0
     out = capsys.readouterr().out
     assert "Usage" in out
+
+
+def test_install_license_reports_a_bad_token(tmp_path, capsys):
+    token_file = tmp_path / "licence.txt"
+    token_file.write_text("not a licence", encoding="utf-8")
+
+    assert app.main(["--install-license", str(token_file)]) == 1
+
+    assert "could not install licence" in capsys.readouterr().err
+
+
+def test_install_license_reports_an_unreadable_file(monkeypatch, capsys):
+    class BrokenPath:
+        def __init__(self, _value):
+            pass
+
+        def is_file(self):
+            raise OSError("access denied")
+
+    monkeypatch.setattr(app, "Path", BrokenPath)
+
+    assert app.main(["--install-license", "token"]) == 1
+
+    assert "could not read the licence file" in capsys.readouterr().err
+
+
+def test_install_license_reports_a_non_utf8_file(tmp_path, capsys):
+    token_file = tmp_path / "licence.key"
+    token_file.write_bytes(b"\xff\xfe broken")
+
+    assert app.main(["--install-license", str(token_file)]) == 1
+
+    assert "could not read the licence file" in capsys.readouterr().err

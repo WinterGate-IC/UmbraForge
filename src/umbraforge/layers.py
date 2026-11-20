@@ -137,7 +137,9 @@ def default_overlays() -> dict:
 
 def merge(defaults: dict, values: dict | None) -> dict:
     out = copy.deepcopy(defaults)
-    if not values:
+    # A hand-edited or partially corrupted file can put a list or string where
+    # a mapping belongs. Keep the defaults instead of failing the whole load.
+    if not isinstance(values, dict):
         return out
     for key, value in values.items():
         if key in out and isinstance(out[key], dict) and isinstance(value, dict):
@@ -145,6 +147,14 @@ def merge(defaults: dict, values: dict | None) -> dict:
         elif key in out:
             out[key] = value
     return out
+
+
+def _whole(value, fallback: int) -> int:
+    """Read a pixel count from a possibly hand-edited value."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return fallback
 
 
 def _clamp(value, low, high, fallback):
@@ -346,7 +356,7 @@ class EmojiLayer(Layer):
         return {"char": self.char, "color": self.color}
 
     def load_payload(self, data: dict) -> None:
-        self.char = str(data.get("char") or "\U0001F600")[:8]
+        self.char = str(data.get("char") or "\U0001F600")
         self.color = str(data.get("color") or "")
 
     def describe(self) -> str:
@@ -468,8 +478,8 @@ def add_asset(assets: dict, data: bytes, name: str = "image",
 
 
 def asset_bytes(assets: dict, asset_id: str) -> bytes | None:
-    record = assets.get(asset_id or "")
-    if not record:
+    record = assets.get(asset_id or "") if isinstance(assets, dict) else None
+    if not isinstance(record, dict):
         return None
     try:
         return base64.b64decode(record.get("data", ""))
@@ -478,8 +488,10 @@ def asset_bytes(assets: dict, asset_id: str) -> bytes | None:
 
 
 def asset_name(assets: dict, asset_id: str) -> str:
-    record = assets.get(asset_id or "")
-    return str(record.get("name") or "image") if record else "missing image"
+    record = assets.get(asset_id or "") if isinstance(assets, dict) else None
+    if not isinstance(record, dict):
+        return "missing image"
+    return str(record.get("name") or "image")
 
 
 def project_info(path: str | Path) -> dict:
@@ -494,13 +506,13 @@ def project_info(path: str | Path) -> dict:
         raise ValueError("That file is not an UmbraForge design.")
     return {
         "name": str(data.get("name") or target.stem),
-        "width": int(data.get("width") or 0),
-        "height": int(data.get("height") or 0),
+        "width": _whole(data.get("width"), 0),
+        "height": _whole(data.get("height"), 0),
         "layers": len(data.get("layers") or []),
         "assets": len(data.get("assets") or {}),
         "saved_at": str(data.get("saved_at") or ""),
         "saved_with": str(data.get("saved_with") or ""),
-        "version": int(data.get("version") or 1),
+        "version": _whole(data.get("version"), 1),
     }
 
 
@@ -652,10 +664,14 @@ class Design:
 
     def load_dict(self, data: dict) -> None:
         self.name = str(data.get("name") or "Untitled")
-        self.set_size(int(data.get("width") or 1200), int(data.get("height") or 1200))
+        self.set_size(_whole(data.get("width"), 1200),
+                      _whole(data.get("height"), 1200))
         self.background = merge(default_background(), data.get("background"))
         self.overlays = merge(default_overlays(), data.get("overlays"))
-        self.assets = dict(data.get("assets") or {})
+        assets = data.get("assets")
+        # A hand-edited file can replace the asset table with a list; keep the
+        # project loadable instead of raising a bare TypeError.
+        self.assets = dict(assets) if isinstance(assets, dict) else {}
         layers: list[Layer] = []
         for raw in data.get("layers") or []:
             if not isinstance(raw, dict):
@@ -758,7 +774,7 @@ class Design:
         data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
         if not isinstance(data, dict) or data.get("format") != "umbraforge":
             raise ValueError("That file is not an UmbraForge design.")
-        version = int(data.get("version") or 1)
+        version = _whole(data.get("version"), 1)
         if version > FORMAT_VERSION:
             raise ValueError(
                 "This design was made with a newer UmbraForge version.")

@@ -10,6 +10,7 @@ from umbraforge.layers import (
     FORMAT_VERSION,
     MAX_LAYERS,
     Design,
+    EmojiLayer,
     History,
     IconLayer,
     ImageLayer,
@@ -59,6 +60,66 @@ def test_merge_keeps_defaults_and_ignores_unknown_keys():
     assert merged["glow"]["color"] == default_effects()["glow"]["color"]
     assert merged["shadow"]["enabled"] is False
     assert "nonsense" not in merged
+
+
+def test_merge_ignores_a_non_mapping_value():
+    assert merge(default_effects(), [1, 2]) == default_effects()
+    assert merge(default_effects(), "glow") == default_effects()
+
+
+def test_corrupt_effects_fall_back_to_the_defaults():
+    layer = Layer.from_dict({"kind": "shape", "effects": [1, 2]})
+
+    assert layer.effects["shadow"]["enabled"] is False
+    assert layer.effects["glow"]["enabled"] is False
+
+
+def test_design_loads_with_a_corrupt_background():
+    design = Design()
+    design.load_dict({"name": "Broken", "background": [1, 2],
+                      "overlays": "none", "layers": []})
+
+    assert design.name == "Broken"
+    assert isinstance(design.background, dict)
+    assert "kind" in design.background
+    assert isinstance(design.overlays, dict)
+
+
+def test_design_loads_with_a_corrupt_asset_table():
+    design = Design()
+    design.load_dict({"name": "Broken", "assets": [1, 2], "layers": []})
+
+    assert design.assets == {}
+
+
+def test_design_loads_with_corrupt_dimensions():
+    design = Design()
+    design.load_dict({"width": "wide", "height": None, "version": "new"})
+
+    assert (design.width, design.height) == (1200, 1200)
+
+
+def test_asset_helpers_ignore_a_non_mapping_record():
+    assets = {"broken": "nonsense", "ok": {"name": "Mark", "data": ""}}
+
+    assert asset_name(assets, "broken") == "missing image"
+    assert asset_name(assets, "ok") == "Mark"
+    assert asset_bytes(assets, "broken") is None
+    assert asset_bytes(assets, "ok") == b""
+
+
+def test_project_info_survives_corrupt_numbers(tmp_path):
+    from umbraforge.layers import project_info
+
+    path = tmp_path / "probe.umbra"
+    path.write_text('{"format": "umbraforge", "width": "wide", '
+                    '"height": [], "version": "new"}', encoding="utf-8")
+
+    info = project_info(path)
+
+    assert info["width"] == 0
+    assert info["height"] == 0
+    assert info["version"] == 1
 
 
 @pytest.mark.parametrize("layer", [
@@ -366,3 +427,11 @@ def test_history_limit_keeps_recent_steps():
     assert len(history.labels()) == 3
     assert history.labels()[-1] == "Step 5"
     assert history.cursor == 2
+
+def test_emoji_payload_keeps_a_full_zwj_sequence():
+    layer = EmojiLayer(char="\U0001F468\U0001F3FD\u200D\U0001F469\U0001F3FD"
+                      "\u200D\U0001F467\U0001F3FD\u200D\U0001F466\U0001F3FD")
+    assert len(layer.char) > 8
+    clone = EmojiLayer()
+    clone.load_payload(layer.payload())
+    assert clone.char == layer.char

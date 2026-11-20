@@ -53,3 +53,48 @@ def test_saves_menu_lists_recent_projects(window, tmp_path):
     assert window._recent_paths()[0] == path.resolve()
     assert window.library_panel._resume_target == path.resolve()
     assert not window.library_panel._resume_button.isHidden()
+
+
+def test_paired_project_overwrite_is_confirmed(qapp, tmp_path, monkeypatch):
+    design = Design(name="Protect My Project")
+    dialog = dialogs.SaveDialog(design)
+    try:
+        target = tmp_path / "art.png"
+        paired = tmp_path / "art.umbra"
+        paired.write_bytes(b"old editable project")
+        seen: list[str] = []
+
+        def question(_parent, _title, text, *args, **kwargs):
+            seen.append(text)
+            return dialogs.QMessageBox.StandardButton.Cancel
+
+        monkeypatch.setattr(dialogs.QMessageBox, "question", question)
+        dialog.path_edit.setText(str(target))
+        dialog._save()
+
+        assert len(seen) == 1
+        assert "art.umbra" in seen[0]
+        assert not target.exists()
+        assert paired.read_bytes() == b"old editable project"
+    finally:
+        dialog.deleteLater()
+
+
+def test_open_saves_folder_reports_a_failed_launch(window, tmp_path,
+                                                   monkeypatch):
+    from umbraforge import branding
+    from umbraforge.ui import main_window
+
+    folder = tmp_path / "saves"
+    monkeypatch.setattr(branding, "saves_dir", lambda: folder)
+    monkeypatch.setattr(main_window.QDesktopServices, "openUrl",
+                        lambda _url: False)
+    warnings: list[tuple] = []
+    monkeypatch.setattr(main_window.QMessageBox, "warning",
+                        lambda *args, **kwargs: warnings.append(args))
+
+    window._open_saves_folder()
+
+    assert folder.is_dir()
+    assert warnings
+    assert str(folder) in warnings[0][2]

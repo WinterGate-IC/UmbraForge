@@ -67,8 +67,13 @@ def main(argv: list[str] | None = None) -> int:
             print("usage: umbraforge --install-license <token|file>", file=sys.stderr)
             return 2
         value = arguments[index + 1]
-        source = Path(value)
-        token = source.read_text(encoding="utf-8").strip() if source.is_file() else value
+        try:
+            source = Path(value)
+            token = (source.read_text(encoding="utf-8").strip()
+                     if source.is_file() else value)
+        except (OSError, ValueError) as exc:
+            print(f"could not read the licence file: {exc}", file=sys.stderr)
+            return 1
         try:
             written = licensing.install_license(token)
         except (OSError, licensing.LicenseError) as exc:

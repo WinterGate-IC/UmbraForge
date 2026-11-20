@@ -23,6 +23,11 @@ def test_hex_to_rgb():
     assert imaging.hex_to_rgb("#zzzzzz", (9, 9, 9)) == (9, 9, 9)
 
 
+def test_hex_to_rgb_ignores_a_non_string_value():
+    assert imaging.hex_to_rgb(5, (1, 2, 3)) == (1, 2, 3)
+    assert imaging.hex_to_rgb(None, (1, 2, 3)) == (1, 2, 3)
+
+
 def test_rgba_to_hex():
     assert imaging.rgba_to_hex(255, 0, 16) == "#ff0010"
     assert imaging.rgba_to_hex(0, 0, 0) == "#000000"

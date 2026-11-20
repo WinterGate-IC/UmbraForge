@@ -419,6 +419,8 @@ class MainWindow(QMainWindow):
 
         undo = self._tool_button("\u21b6", "Undo  (Ctrl+Z)", self.act_undo)
         redo = self._tool_button("\u21b7", "Redo  (Ctrl+Shift+Z)", self.act_redo)
+        self.undo_button = undo
+        self.redo_button = redo
         layout.addWidget(undo)
         layout.addWidget(redo)
 
@@ -434,7 +436,7 @@ class MainWindow(QMainWindow):
         save = self._bar_button("Save", self.act_save, "primary")
         save.setMinimumWidth(92)
         save.setToolTip("Save an image or the editable project - one flow, "
-                        "any format")
+                        "any format  (Ctrl+S)")
         layout.addWidget(save)
         return bar
 
@@ -595,8 +597,13 @@ class MainWindow(QMainWindow):
         if not self._maybe_save():
             return
         dialog = NewDesignDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._set_design(dialog.build_design(), None)
+        try:
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            design = dialog.build_design() if accepted else None
+        finally:
+            dialog.deleteLater()
+        if design is not None:
+            self._set_design(design, None)
             self._flash("New design ready.")
 
     def _new_blank(self) -> None:
@@ -683,19 +690,38 @@ class MainWindow(QMainWindow):
                 paths.append(path)
         return paths
 
+    @staticmethod
+    def _same_path(a: str | Path, b: str | Path) -> bool:
+        """Compare two project paths the way the file system sees them."""
+        first = Path(a).expanduser()
+        second = Path(b).expanduser()
+        try:
+            return first.resolve() == second.resolve()
+        except (OSError, RuntimeError):
+            return first == second
+
+    def _prune_recent_paths(self) -> list[Path]:
+        """Drop projects that have gone missing, keeping menus and saves tidy."""
+        paths = self._recent_paths()
+        live = [path for path in paths if path.exists()]
+        if len(live) != len(paths):
+            self.settings.setValue(
+                "recent_projects", [str(item) for item in live])
+            if hasattr(self, "library_panel"):
+                self.library_panel.set_recent_projects(live)
+        return live
+
     def _remember_project(self, path: str | Path) -> None:
         target = Path(path).expanduser()
         try:
             target = target.resolve()
-        except OSError:
+        except (OSError, RuntimeError):
             pass
         existing = []
         for item in self._recent_paths():
-            try:
-                same = item.resolve() == target
-            except OSError:
-                same = item == target
-            if not same:
+            if not item.exists():
+                continue
+            if not self._same_path(item, target):
                 existing.append(item)
         paths = [target, *existing][:8]
         self.settings.setValue("recent_projects", [str(item) for item in paths])
@@ -706,7 +732,8 @@ class MainWindow(QMainWindow):
 
     def _forget_project(self, path: str | Path) -> None:
         target = Path(path).expanduser()
-        remaining = [item for item in self._recent_paths() if item != target]
+        remaining = [item for item in self._recent_paths()
+                     if not self._same_path(item, target)]
         self.settings.setValue("recent_projects", [str(item) for item in remaining])
         self._rebuild_recent_menu()
         self._rebuild_saves_menu()
@@ -724,7 +751,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "recent_menu"):
             return
         self.recent_menu.clear()
-        paths = [path for path in self._recent_paths() if path.exists()]
+        paths = self._prune_recent_paths()
         if not paths:
             empty = self.recent_menu.addAction("No recent projects yet")
             empty.setEnabled(False)
@@ -744,7 +771,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "saves_menu"):
             return
         self.saves_menu.clear()
-        paths = [path for path in self._recent_paths() if path.exists()]
+        paths = self._prune_recent_paths()
 
         resume = self.saves_menu.addAction("Continue where you left off")
         resume.setEnabled(bool(paths))
@@ -780,7 +807,7 @@ class MainWindow(QMainWindow):
                                        self._clear_recent_projects)
 
     def _continue_last(self) -> None:
-        paths = [path for path in self._recent_paths() if path.exists()]
+        paths = self._prune_recent_paths()
         if paths:
             self._open_path(paths[0])
 
@@ -792,7 +819,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Saves",
                                 f"Could not open the saves folder:\n{exc}")
             return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+            QMessageBox.warning(
+                self, "Saves",
+                "Could not open the saves folder automatically.\n\n"
+                f"You can open it yourself:\n{folder}")
 
     def _save(self, *, project_only: bool = False) -> bool:
         """Save the canvas: project or flat image, chosen in one dialog.
@@ -809,18 +840,21 @@ class MainWindow(QMainWindow):
             self.design, self,
             preferred_format=preferred_format,
             preferred_path=preferred_path)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        try:
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            saved = dialog.saved_path
+            project = dialog.saved_project_path
+            saved_format = dialog.saved_format
+        finally:
+            dialog.deleteLater()
+        if not accepted or saved is None:
             return False
-        saved = dialog.saved_path
-        if saved is None:
-            return False
-        project = dialog.saved_project_path
         if project is not None:
             self.path = Path(project)
             self._dirty = False
             self.settings.setValue("last_project_dir", str(self.path.parent))
             self._remember_project(self.path)
-            if dialog.saved_format == "umbra":
+            if saved_format == "umbra":
                 self._flash(f"Project saved as {saved.name} - reopen it from "
                             "Saves to keep editing.")
             else:
@@ -852,16 +886,31 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Save)
-        if answer == QMessageBox.StandardButton.Save:
-            return self._save()
+        if answer != QMessageBox.StandardButton.Save:
+            return answer == QMessageBox.StandardButton.Discard
+        if not self._save():
+            return False
+        if not self._dirty:
+            return True
+        # The save flow can export a flat image without writing an editable
+        # project. Do not silently throw the layers away in that case.
+        answer = QMessageBox.question(
+            self, "Editable design not saved",
+            "The image was exported, but the editable design has not been "
+            "saved as a project.\n\nContinue without saving it?",
+            QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Discard
 
     def _rename_design(self) -> None:
         name = self.name_edit.text().strip() or "Untitled"
+        # Keep the field showing the real name even when only whitespace was
+        # typed, so an empty box never looks like a nameless design.
+        self.name_edit.setText(name)
         if name == self.design.name:
             return
         self.design.name = name
-        self.name_edit.setText(name)
         self._record("Rename design", "design-name")
         self._update_title()
 
@@ -932,7 +981,7 @@ class MainWindow(QMainWindow):
 
     def _on_inspector_changed(self, label: str, key: str) -> None:
         self._record(label, key)
-        self.canvas.refresh(reset=key == "canvas-size")
+        self.canvas.refresh(reset=key.startswith("canvas-size"))
         if key.startswith(("rename-", "lock-", "visible-")):
             self.layers_panel.refresh()
         if key.startswith(("replace-", "bg-image", "canvas-size", "clear-layers")):
@@ -945,7 +994,7 @@ class MainWindow(QMainWindow):
         if layer is None:
             self._flash("Select a layer to duplicate.")
             return
-        self._record("Duplicate layer", "duplicate-layer")
+        self._record("Duplicate layer", f"duplicate-{layer.id}")
         self.canvas.refresh()
         self.layers_panel.refresh()
         self.inspector.refresh()
@@ -959,7 +1008,7 @@ class MainWindow(QMainWindow):
             self._flash("Select a layer to delete.")
             return
         design.remove(layer.id)
-        self._record("Delete layer", "delete-layer")
+        self._record("Delete layer", f"delete-{layer.id}")
         self.canvas.refresh()
         self.layers_panel.refresh()
         self.inspector.refresh()
@@ -971,7 +1020,7 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.locked = not layer.locked
-        self._record("Lock layer", f"lock-{layer.id}")
+        self._record("Lock layer", f"lock-{layer.id}-{int(layer.locked)}")
         self.layers_panel.refresh()
         self.canvas.update()
         self.inspector.refresh()
@@ -980,7 +1029,8 @@ class MainWindow(QMainWindow):
     def _reorder(self, delta: int) -> None:
         layer = self.design.active
         if layer and self.design.move(layer.id, delta):
-            self._record("Reorder layers", "reorder")
+            self._record("Reorder layers",
+                         f"reorder-{layer.id}-{self.design.layers.index(layer)}")
             self.layers_panel.refresh()
             self.canvas.refresh()
             self._update_actions()
@@ -992,7 +1042,8 @@ class MainWindow(QMainWindow):
         changed = (self.design.to_front(layer.id) if front
                    else self.design.to_back(layer.id))
         if changed:
-            self._record("Reorder layers", "reorder")
+            self._record("Reorder layers",
+                         f"reorder-{layer.id}-{self.design.layers.index(layer)}")
             self.layers_panel.refresh()
             self.canvas.refresh()
             self._update_actions()
@@ -1012,7 +1063,7 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.flip_h = not layer.flip_h
-        self._record("Flip layer", f"flip-{layer.id}")
+        self._record("Flip layer", f"flip-h-{layer.id}-{int(layer.flip_h)}")
         self.canvas.refresh()
         self.inspector.refresh()
 
@@ -1021,7 +1072,7 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.flip_v = not layer.flip_v
-        self._record("Flip layer", f"flip-{layer.id}")
+        self._record("Flip layer", f"flip-v-{layer.id}-{int(layer.flip_v)}")
         self.canvas.refresh()
         self.inspector.refresh()
 
@@ -1344,9 +1395,11 @@ class MainWindow(QMainWindow):
                                 f"Could not read that image:\n{exc}")
             return
         dialog = CutoutDialog(image, asset_name(design.assets, layer.asset_id), self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        result = dialog.result_image()
+        try:
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            result = dialog.result_image() if accepted else None
+        finally:
+            dialog.deleteLater()
         if result is None:
             return
         encoded = imaging.encode_png(result)
@@ -1490,10 +1543,17 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ help
     def _guide(self) -> None:
-        GuideDialog(self).exec()
+        self._show_dialog(GuideDialog(self))
 
     def _about(self) -> None:
-        AboutDialog(self).exec()
+        self._show_dialog(AboutDialog(self))
+
+    def _show_dialog(self, dialog) -> None:
+        """Run a modal dialog and release its widget tree afterwards."""
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     # ---------------------------------------------------------------- status
     def _flash(self, message: str) -> None:
@@ -1505,8 +1565,20 @@ class MainWindow(QMainWindow):
         self.status_hint.setText(f"Selected: {layer.name}" if layer else "Ready")
 
     def _update_actions(self) -> None:
+        undo = self.history.undo_label()
+        redo = self.history.redo_label()
+        self.act_undo.setText(f"Undo {undo}" if undo else "Undo")
+        self.act_redo.setText(f"Redo {redo}" if redo else "Redo")
         self.act_undo.setEnabled(self.history.can_undo)
         self.act_redo.setEnabled(self.history.can_redo)
+        if hasattr(self, "undo_button"):
+            self.undo_button.setToolTip(
+                f"Undo {undo}  (Ctrl+Z)" if self.history.can_undo
+                else "Nothing to undo  (Ctrl+Z)")
+        if hasattr(self, "redo_button"):
+            self.redo_button.setToolTip(
+                f"Redo {redo}  (Ctrl+Shift+Z)" if self.history.can_redo
+                else "Nothing to redo  (Ctrl+Shift+Z)")
         layer = self.design.active
         index = self.design.layers.index(layer) if layer else -1
         has = layer is not None

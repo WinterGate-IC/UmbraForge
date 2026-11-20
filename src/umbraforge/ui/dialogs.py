@@ -252,6 +252,7 @@ class NewDesignDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         create = QPushButton("Create design")
         create.setObjectName("primary")
+        create.setDefault(True)
         buttons.addButton(create, QDialogButtonBox.ButtonRole.AcceptRole)
         create.clicked.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -259,6 +260,8 @@ class NewDesignDialog(QDialog):
 
         self._choose(presets.DEFAULT_PRESET)
         self._update_summary()
+        self.name_edit.selectAll()
+        self.name_edit.setFocus()
 
     @staticmethod
     def _caption(text: str) -> QLabel:
@@ -471,7 +474,7 @@ class SaveDialog(QDialog):
         self.size_row = QWidget()
         size_row = QHBoxLayout(self.size_row)
         size_row.setContentsMargins(0, 0, 0, 0)
-        size_row.addWidget(QLabel("Quality"))
+        size_row.addWidget(QLabel("Resolution"))
         self.scale_combo = QComboBox()
         for tier in quality.tiers_for(design):
             self.scale_combo.addItem(tier.name, tier.scale)
@@ -700,10 +703,19 @@ class SaveDialog(QDialog):
         if path.suffix.lower().lstrip(".") not in allowed:
             path = path.with_suffix(f".{suffix}")
             self.path_edit.setText(str(path))
-        if path.exists():
+        targets = [path]
+        if fmt != "umbra" and self.project_copy.isChecked():
+            targets.append(path.with_suffix(".umbra"))
+        existing = [item for item in targets if item.exists()]
+        if existing:
+            if len(existing) == 1:
+                question = f"{existing[0].name} already exists. Replace it?"
+            else:
+                names = "\n".join(f"  {item.name}" for item in existing)
+                question = ("These files already exist:\n"
+                            f"{names}\n\nReplace them?")
             answer = QMessageBox.question(
-                self, "Replace file",
-                f"{path.name} already exists. Replace it?",
+                self, "Replace existing files", question,
                 QMessageBox.StandardButton.Yes
                 | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Cancel)

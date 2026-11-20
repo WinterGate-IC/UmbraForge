@@ -113,14 +113,17 @@ class GlyphPickerDialog(QDialog):
     # ---------------------------------------------------------------- widgets
     def _clear(self) -> None:
         for widget in self._grids:
+            self.body_layout.removeWidget(widget)
             widget.setParent(None)
             widget.deleteLater()
         self._grids = []
         if self._empty is not None:
+            self.body_layout.removeWidget(self._empty)
             self._empty.setParent(None)
             self._empty.deleteLater()
             self._empty = None
         if self._tail is not None:
+            self.body_layout.removeWidget(self._tail)
             self._tail.setParent(None)
             self._tail.deleteLater()
             self._tail = None
@@ -146,7 +149,6 @@ class GlyphPickerDialog(QDialog):
         self._tail = hint("Click a tile to use it. Search matches names and "
                           "keywords.")
         self.body_layout.insertWidget(insert + 2, self._tail)
-        self._grids.append(self._tail)
 
     def _choose(self, key: str) -> None:
         if not key:
@@ -161,9 +163,14 @@ def pick_glyph(kind: str, parent: QWidget | None = None,
                current: str = "") -> str:
     """Show the picker and return the chosen key, or ``""`` if cancelled."""
     dialog = GlyphPickerDialog(kind, parent, current)
-    if dialog.exec() != QDialog.DialogCode.Accepted:
-        return ""
-    return dialog.selected
+    try:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return ""
+        return dialog.selected
+    finally:
+        # The dialog owns hundreds of tile buttons; without this it would
+        # linger (parented to the window) for the rest of the session.
+        dialog.deleteLater()
 
 
 __all__ = ["GlyphPickerDialog", "pick_glyph"]

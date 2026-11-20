@@ -110,8 +110,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.5-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.5.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.6-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.6.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -283,8 +283,8 @@ other apps cannot open it, but UmbraForge can return to it as often as you like.
 - **Saves > Continue where you left off** reopens the most recent project in
   one click, with the last eight projects listed underneath and timestamps so
   you can tell versions apart.
-- The **Start** tab shows a **Continue "<project>"** button plus the recent
-  project list.
+- The **Start** tab shows a **Continue** button for the most recent project,
+  plus the recent project list.
 - **File > Open recent** does the same from the menu.
 - **Save editable copy** (**Ctrl+Alt+S**) writes an `.umbra` even when the last
   save was a flat image.
@@ -310,7 +310,7 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.5",
+  "saved_with": "UmbraForge 0.1.6",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
@@ -412,11 +412,44 @@ umbraforge/
 
 ## Status
 
-Version 0.1.5 is the current Windows release. It ships as one timestamped
+Version 0.1.6 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
+
+What changed in 0.1.6:
+
+- this is a **stability release**: corrupted or hand-edited `.umbra` files no
+  longer fail the whole load when one value is wrong - bad dimensions,
+  background or overlay blocks, asset tables and colour values all fall back to
+  sane defaults, and unfinished layers are skipped instead of aborting;
+- the **custom art shelf** ignores a broken timestamp or a nameless record,
+  so one bad edit cannot hide every shape and icon you imported;
+- **undo history** now groups discrete actions correctly: duplicate, delete,
+  lock, reorder and visibility toggles each become their own undo step instead
+  of folding together, and **Undo**/**Redo** are named in the menu with
+  tooltips describing the next step;
+- the **save dialog** confirms replacing both the image and its paired
+  `.umbra` project, flags unsaved changes before closing even after exporting
+  only a flat image, and labels the size control **Resolution**;
+- **recent projects** prune files that no longer exist, treat equivalent paths
+  as one entry, and no longer promise a file that has been moved;
+- the **saves folder** reports a real error instead of silently doing nothing
+  when it cannot be created or opened;
+- the **New design** dialog focuses the name field and makes **Create** the
+  default action, and whitespace-only design names are normalised;
+- long-lived dialogs (glyph picker, save, new design) are released after they
+  close, and the emoji **Recent** shelf updates as soon as you pick a glyph;
+- emoji layers now trim oversized payloads before saving;
+- **Setup** refuses to run without its payload instead of writing an empty
+  install, and a one-file payload archive now installs that file instead of
+  extracting nothing;
+- the **uninstaller** actually removes the program folder again, including
+  paths with spaces, `&`, `%`, parentheses and accented characters, while
+  keeping your saved projects in Documents;
+- `--install-license` reports an unreadable or non-UTF-8 licence file instead
+  of raising, and a corrupt stored licence is treated as unlicensed.
 
 What changed in 0.1.5:
 

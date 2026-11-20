@@ -302,7 +302,8 @@ class Inspector(QWidget):
 
         lock = self._check("Lock this layer", layer.locked,
                            lambda checked: self._apply(
-                               "Lock layer", f"lock-{layer.id}",
+                               "Lock layer",
+                               f"lock-{layer.id}-{int(checked)}",
                                lambda: setattr(layer, "locked", checked)))
         self.layer_layout.addWidget(lock)
 
@@ -349,12 +350,12 @@ class Inspector(QWidget):
         flip_h = QPushButton("Flip \u2194")
         flip_h.setObjectName("chip")
         flip_h.clicked.connect(lambda: self._apply(
-            "Flip layer", f"flip-{layer.id}",
+            "Flip layer", f"flip-h-{layer.id}-{int(not layer.flip_h)}",
             lambda: setattr(layer, "flip_h", not layer.flip_h)))
         flip_v = QPushButton("Flip \u2195")
         flip_v.setObjectName("chip")
         flip_v.clicked.connect(lambda: self._apply(
-            "Flip layer", f"flip-{layer.id}",
+            "Flip layer", f"flip-v-{layer.id}-{int(not layer.flip_v)}",
             lambda: setattr(layer, "flip_v", not layer.flip_v)))
         for button in (center, flip_h, flip_v):
             buttons.addWidget(button)
@@ -1112,7 +1113,8 @@ class Inspector(QWidget):
             return
         key = self.preset_combo.currentData()
         design = self.design()
-        self._apply("Canvas size", "canvas-size", lambda: design.set_preset(key))
+        self._apply("Canvas size", f"canvas-size-{key}",
+                    lambda: design.set_preset(key))
         self._sync_canvas()
 
     def _custom_size_changed(self, _value: float) -> None:
@@ -1152,7 +1154,9 @@ class Inspector(QWidget):
         first = background.get("color", "#0a0a10")
         background["color"] = background.get("color2", "#26123a")
         background["color2"] = first
-        self._apply("Swap background colours", "bg-swap",
+        self._apply("Swap background colours",
+                    f"bg-swap-{background.get('color')}-"
+                    f"{background.get('color2')}",
                     lambda: setattr(design, "background", background))
         self._sync_canvas()
 
@@ -1161,7 +1165,7 @@ class Inspector(QWidget):
             return
         preset = random.choice(backgrounds.PRESETS)
         background = copy.deepcopy(preset.background)
-        self._apply("Randomise background", "bg-random",
+        self._apply("Randomise background", f"bg-random-{preset.key}",
                     lambda: setattr(self.design(), "background", background))
         self._sync_canvas()
 

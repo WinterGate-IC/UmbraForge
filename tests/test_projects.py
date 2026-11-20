@@ -196,6 +196,31 @@ def test_recent_project_is_listed_and_reopens(window, tmp_path):
     assert "recent.umbra" in window.windowTitle()
 
 
+def test_forget_project_resolves_equivalent_paths(window, tmp_path):
+    path = Design(name="Alias Project").save(tmp_path / "alias.umbra")
+    window._remember_project(path)
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    alias = nested / ".." / "alias.umbra"
+    assert alias != path.resolve()
+
+    window._forget_project(alias)
+
+    assert window._recent_paths() == []
+    assert window.library_panel._resume_target is None
+
+
+def test_missing_recent_projects_are_dropped(window, tmp_path):
+    path = Design(name="Gone Project").save(tmp_path / "gone.umbra")
+    window._remember_project(path)
+    path.unlink()
+
+    window._rebuild_saves_menu()
+
+    assert window._recent_paths() == []
+    assert window.library_panel._resume_target is None
+
+
 def test_drop_targets_split_projects_from_images(window, tmp_path):
     project = tmp_path / "drop.umbra"
     project.write_text("{}", encoding="utf-8")

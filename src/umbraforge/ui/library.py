@@ -877,7 +877,10 @@ class LibraryPanel(QWidget):
             "a new layer")
         layout.addWidget(self._emoji_swap)
         self._emoji_cards: list[QWidget] = []
+        self._emoji_recent: list[QWidget] = []
+        self._emoji_recent_key: tuple | None = None
         self._emoji_layout = layout
+        self._emoji_content_index = layout.count()
         self._emoji_built = False
         layout.addStretch(1)
         return area
@@ -899,9 +902,11 @@ class LibraryPanel(QWidget):
             return
         layout = self._emoji_layout
         for widget in self._emoji_cards:
+            layout.removeWidget(widget)
             widget.setParent(None)
             widget.deleteLater()
         self._emoji_cards = []
+        self._emoji_recent = []
         needle = (self._emoji_search.text().strip()
                   if hasattr(self, "_emoji_search") else "")
         category = (self._emoji_category.currentText()
@@ -913,6 +918,7 @@ class LibraryPanel(QWidget):
                              "here for quick reuse.")
                 layout.insertWidget(layout.count() - 1, empty)
                 self._emoji_cards.append(empty)
+                self._emoji_recent = [empty]
                 self._fit_scroll(self._emoji_area)
                 return
             label = caption("Recent")
@@ -923,6 +929,7 @@ class LibraryPanel(QWidget):
             grid.chosen.connect(self._use_emoji)
             layout.insertWidget(layout.count() - 1, grid)
             self._emoji_cards.append(grid)
+            self._emoji_recent = [label, grid]
         elif category in ("", "All emoji") and not needle:
             recent = emojis.recent(14)
             if recent:
@@ -934,6 +941,7 @@ class LibraryPanel(QWidget):
                 grid.chosen.connect(self._use_emoji)
                 layout.insertWidget(layout.count() - 1, grid)
                 self._emoji_cards.append(grid)
+                self._emoji_recent = [label, grid]
             for cat in emojis.categories():
                 cat_entries = emojis.entries(cat)
                 if not cat_entries:
@@ -966,6 +974,47 @@ class LibraryPanel(QWidget):
                     "categories. Right-click a selected emoji layer for more.")
         layout.insertWidget(layout.count() - 1, tail)
         self._emoji_cards.append(tail)
+        self._fit_scroll(self._emoji_area)
+
+    def _refresh_emoji_recent(self) -> None:
+        """Rebuild just the Recent strip; the full shelf takes seconds."""
+        if (not hasattr(self, "_emoji_recent")
+                or not hasattr(self, "_emoji_layout")):
+            return
+        category = (self._emoji_category.currentText()
+                    if hasattr(self, "_emoji_category") else "All emoji")
+        needle = (self._emoji_search.text().strip()
+                  if hasattr(self, "_emoji_search") else "")
+        if needle or category not in ("", "All emoji", "Recent emoji"):
+            return
+        limit = 30 if category == "Recent emoji" else 14
+        found = emojis.recent(limit)
+        key = (category, tuple(item.char for item in found))
+        if key == self._emoji_recent_key:
+            return
+        layout = self._emoji_layout
+        index = getattr(self, "_emoji_content_index", 0)
+        for widget in self._emoji_recent:
+            if widget in self._emoji_cards:
+                self._emoji_cards.remove(widget)
+            layout.removeWidget(widget)
+            widget.setParent(None)
+            widget.deleteLater()
+        self._emoji_recent = []
+        widgets: list[QWidget] = []
+        if found:
+            grid = IconGrid([(item.char, item.name) for item in found],
+                            kind="emoji", columns=6, icon_size=28)
+            grid.chosen.connect(self._use_emoji)
+            widgets = [caption("Recent"), grid]
+        elif category == "Recent emoji":
+            widgets = [hint("No recent emoji yet. Pick one and it will appear "
+                            "here for quick reuse.")]
+        for offset, widget in enumerate(widgets):
+            layout.insertWidget(index + offset, widget)
+        self._emoji_recent = widgets
+        self._emoji_cards = widgets + self._emoji_cards
+        self._emoji_recent_key = key
         self._fit_scroll(self._emoji_area)
 
     def _effect_tab(self) -> QWidget:
@@ -1310,3 +1359,4 @@ class LibraryPanel(QWidget):
             stack = getattr(design, "overlays", None)
             self._overlay_active.setText(
                 f"Active overlay: {overlays.describe(stack)}")
+        self._refresh_emoji_recent()

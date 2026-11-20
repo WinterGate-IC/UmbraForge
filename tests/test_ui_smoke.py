@@ -406,3 +406,339 @@ def test_dialogs_construct_offscreen(window):
     assert branding.APP_NAME in about.windowTitle()
     guide.deleteLater()
     about.deleteLater()
+
+
+# --------------------------------------------------------------------------
+# undo grouping for discrete actions
+# --------------------------------------------------------------------------
+def _blank(window):
+    window.design.layers.clear()
+    window.design.selected = None
+    window.history.reset()
+
+
+def test_two_quick_deletes_are_two_undo_steps(window):
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    window._add_shape("hexagon")
+    first, second = design.layers
+
+    design.selected = first.id
+    window._delete_layer()
+    design.selected = second.id
+    window._delete_layer()
+
+    assert window.history.cursor == 4
+    assert window.history.labels()[-2:] == ["Delete layer", "Delete layer"]
+
+    window._undo()
+    assert len(design.layers) == 1
+    window._undo()
+    assert len(design.layers) == 2
+
+
+def test_two_quick_duplicates_are_two_undo_steps(window):
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    window._duplicate_layer()
+    window._duplicate_layer()
+
+    assert len(design.layers) == 3
+    assert window.history.cursor == 3
+    assert window.history.labels()[-2:] == ["Duplicate layer", "Duplicate layer"]
+
+    window._undo()
+    assert len(design.layers) == 2
+    window._undo()
+    assert len(design.layers) == 1
+
+
+def test_two_quick_reorders_are_two_undo_steps(window):
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    window._add_shape("hexagon")
+    window._add_shape("star5")
+    bottom = design.layers[0]
+    design.selected = bottom.id
+
+    window._reorder(1)
+    window._reorder(1)
+    assert window.history.cursor == 5
+    assert design.layers.index(design.layer(bottom.id)) == 2
+
+    window._undo()
+    assert design.layers.index(design.layer(bottom.id)) == 1
+    window._undo()
+    assert design.layers.index(design.layer(bottom.id)) == 0
+
+
+def test_layer_panel_delete_and_duplicate_keep_their_own_steps(window, qapp):
+    design = window.design
+    panel = window.layers_panel
+    _blank(window)
+    window._add_shape("circle")
+    panel.refresh()
+    qapp.processEvents()
+
+    panel.duplicate()
+    panel.duplicate()
+    assert window.history.cursor == 3
+    assert window.history.labels()[-2:] == ["Duplicate layer", "Duplicate layer"]
+
+    panel.delete()
+    panel.delete()
+    assert window.history.cursor == 5
+    assert window.history.labels()[-2:] == ["Delete layer", "Delete layer"]
+
+    window._undo()
+    assert len(design.layers) == 2
+    window._undo()
+    assert len(design.layers) == 3
+
+
+def test_two_quick_canvas_drags_are_two_undo_steps(window, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    design = window.design
+    _blank(window)
+    window.resize(1180, 820)
+    window.show()
+    qapp.processEvents()
+    window._add_shape("circle")
+    layer = design.active
+    canvas = window.canvas
+    canvas.fit()
+    qapp.processEvents()
+
+    start_x = layer.x
+
+    def drag(dx: int) -> None:
+        current = design.layer(layer.id)
+        centre = canvas.to_screen(design.width * (current.x + current.w / 2),
+                                  design.height * (current.y + current.h / 2)
+                                  ).toPoint()
+        end = QPoint(centre.x() + dx, centre.y())
+        QTest.mousePress(canvas, Qt.MouseButton.LeftButton,
+                         Qt.KeyboardModifier.NoModifier, centre)
+        QTest.mouseMove(canvas, end)
+        QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton,
+                           Qt.KeyboardModifier.NoModifier, end)
+        qapp.processEvents()
+
+    drag(60)
+    moved_once = design.layer(layer.id).x
+    drag(60)
+    moved_twice = design.layer(layer.id).x
+
+    assert moved_once != start_x
+    assert moved_twice != moved_once
+    assert window.history.labels()[-2:] == ["Move layer", "Move layer"]
+    assert window.history.cursor == 3
+
+    window._undo()
+    assert abs(design.layer(layer.id).x - moved_once) < 1e-6
+    window._undo()
+    assert abs(design.layer(layer.id).x - start_x) < 1e-6
+
+
+def test_two_quick_nudges_are_two_undo_steps(window, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    layer = design.active
+    start_x = layer.x
+    canvas = window.canvas
+    canvas.setFocus()
+    qapp.processEvents()
+
+    QTest.keyClick(canvas, Qt.Key.Key_Right)
+    qapp.processEvents()
+    once = design.layer(layer.id).x
+    QTest.keyClick(canvas, Qt.Key.Key_Right)
+    qapp.processEvents()
+    twice = design.layer(layer.id).x
+
+    assert once > start_x
+    assert twice > once
+    assert window.history.labels()[-2:] == ["Nudge layer", "Nudge layer"]
+
+    window._undo()
+    assert abs(design.layer(layer.id).x - once) < 1e-6
+    window._undo()
+    assert abs(design.layer(layer.id).x - start_x) < 1e-6
+
+
+# --------------------------------------------------------------------------
+# picker and recent-emoji housekeeping
+# --------------------------------------------------------------------------
+def test_glyph_picker_clears_each_widget_once(qapp):
+    from umbraforge.ui.pickers import GlyphPickerDialog
+
+    dialog = GlyphPickerDialog("shape")
+    try:
+        assert dialog._tail is not None
+        assert dialog._tail not in dialog._grids
+        assert dialog.body_layout.count() == 4
+        dialog._refresh()
+        dialog._refresh()
+        assert dialog.body_layout.count() == 4
+        dialog._clear()
+        assert dialog.body_layout.count() == 1
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+
+def test_pick_glyph_disposes_the_dialog(monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    from umbraforge.ui import pickers
+
+    seen: list[object] = []
+    disposed: list[object] = []
+
+    def fake_exec(self):
+        seen.append(self)
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(pickers.GlyphPickerDialog, "exec", fake_exec)
+    monkeypatch.setattr(pickers.GlyphPickerDialog, "deleteLater",
+                        lambda self: disposed.append(self))
+
+    assert pickers.pick_glyph("shape") == ""
+    assert len(seen) == 1
+    assert disposed == seen
+
+
+def test_emoji_recent_strip_updates_without_rebuilding_every_tile(window,
+                                                                  monkeypatch,
+                                                                  qapp):
+    from umbraforge import emojis
+
+    panel = window.library_panel
+    index = panel.section_labels().index("Emoji")
+    panel.show_section(index)
+    qapp.processEvents()
+
+    emojis.clear_recent()
+    emojis.remember("\U0001F984")
+    monkeypatch.setattr(
+        panel, "_refresh_emoji_list",
+        lambda: (_ for _ in ()).throw(AssertionError("full emoji rebuild")))
+    panel.refresh()
+    qapp.processEvents()
+
+    grids = [widget for widget in panel._emoji_recent
+             if widget.__class__.__name__ == "IconGrid"]
+    assert grids
+    assert any(button.toolTip() == "Unicorn" for button in grids[0]._buttons)
+    emojis.clear_recent()
+
+def test_two_quick_flips_are_two_undo_steps(window):
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    layer = design.active
+
+    window._flip_h()
+    once = design.layer(layer.id).flip_h
+    window._flip_h()
+    twice = design.layer(layer.id).flip_h
+
+    assert once != twice
+    assert window.history.labels()[-2:] == ["Flip layer", "Flip layer"]
+    assert window.history.cursor == 3
+
+    window._undo()
+    assert design.layer(layer.id).flip_h == once
+    window._undo()
+    assert design.layer(layer.id).flip_h == (not once)
+
+
+def test_two_quick_lock_toggles_are_two_undo_steps(window):
+    design = window.design
+    _blank(window)
+    window._add_shape("circle")
+    layer = design.active
+
+    window._toggle_lock()
+    assert design.layer(layer.id).locked is True
+    window._toggle_lock()
+    assert design.layer(layer.id).locked is False
+    assert window.history.labels()[-2:] == ["Lock layer", "Lock layer"]
+    assert window.history.cursor == 3
+
+    window._undo()
+    assert design.layer(layer.id).locked is True
+    window._undo()
+    assert design.layer(layer.id).locked is False
+
+
+def test_undo_and_redo_names_show_the_last_action(window):
+    _blank(window)
+    window._add_shape("circle")
+
+    assert window.act_undo.text() == "Undo Add shape"
+    assert window.undo_button.toolTip() == "Undo Add shape  (Ctrl+Z)"
+    window._undo()
+    assert window.act_redo.text() == "Redo Add shape"
+    assert window.redo_button.toolTip() == "Redo Add shape  (Ctrl+Shift+Z)"
+    window._redo()
+    assert window.act_undo.text() == "Undo Add shape"
+
+
+def test_rename_with_whitespace_keeps_the_name_visible(window):
+    window.design.name = "Untitled"
+    window.name_edit.setText("   ")
+    window._rename_design()
+
+    assert window.design.name == "Untitled"
+    assert window.name_edit.text() == "Untitled"
+
+
+def test_maybe_save_warns_when_only_an_image_was_exported(window, monkeypatch):
+    from umbraforge.ui import main_window
+
+    window._dirty = True
+    prompts: list[str] = []
+
+    def question(_parent, title, _text, *args, **kwargs):
+        prompts.append(title)
+        if len(prompts) == 1:
+            return main_window.QMessageBox.StandardButton.Save
+        return main_window.QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(main_window.QMessageBox, "question", question)
+    monkeypatch.setattr(window, "_save", lambda: True)
+
+    assert window._maybe_save() is False
+    assert prompts == ["Unsaved changes", "Editable design not saved"]
+    assert window._dirty is True
+
+
+def test_new_design_dialog_is_released_after_use(window, monkeypatch):
+    from umbraforge.ui import dialogs, main_window
+
+    released = []
+    original = dialogs.NewDesignDialog.deleteLater
+
+    def record(self):
+        released.append(self)
+        original(self)
+
+    monkeypatch.setattr(dialogs.NewDesignDialog, "exec",
+                        lambda self: main_window.QDialog.DialogCode.Rejected)
+    monkeypatch.setattr(dialogs.NewDesignDialog, "deleteLater", record)
+    window._dirty = False
+
+    window._new()
+
+    assert len(released) == 1

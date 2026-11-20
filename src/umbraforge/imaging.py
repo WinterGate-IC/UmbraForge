@@ -34,7 +34,7 @@ def encode_png(image: Image.Image) -> bytes:
 
 
 def hex_to_rgb(value: str, fallback: tuple[int, int, int] = (255, 122, 61)) -> tuple[int, int, int]:
-    text = (value or "").strip().lstrip("#")
+    text = str(value or "").strip().lstrip("#")
     if len(text) == 3:
         text = "".join(ch * 2 for ch in text)
     if len(text) != 6:

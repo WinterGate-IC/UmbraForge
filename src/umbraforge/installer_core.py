@@ -94,9 +94,13 @@ def _safe_members(archive: zipfile.ZipFile, destination: Path) -> list[tuple]:
     prefix = ""
     if len(tops) == 1:
         candidate = next(iter(tops))
-        if all(name == candidate or name.startswith(candidate + "/")
-               for name in names):
-            prefix = candidate + "/"
+        wrapper = candidate + "/"
+        # Only a real wrapper folder may be flattened. A lone top-level file
+        # must stay a file, otherwise a one-file archive installs nothing.
+        if (any(name.startswith(wrapper) for name in names)
+                and all(name == candidate or name.startswith(wrapper)
+                        for name in names)):
+            prefix = wrapper
 
     members: list[tuple] = []
     for info in archive.infolist():
@@ -196,26 +200,61 @@ def _ps_quote(value) -> str:
     return str(value).replace("'", "''")
 
 
+def _batch_percent(value) -> str:
+    """Double percent signs so cmd.exe keeps them literal."""
+    return str(value).replace("%", "%%")
+
+
+def _batch_rmdir(value) -> str:
+    """Escape a path for a plain ``rmdir /s /q "<path>"`` line in a .cmd file.
+
+    Batch quoting keeps ``&``, ``()`` and ``^`` literal, but percent signs are
+    still expanded while the file is read, so they have to be doubled.
+    """
+    return _batch_percent(value)
+
+
+def _batch_encoding() -> str:
+    """The code page cmd.exe uses when it reads a .cmd file."""
+    if IS_WINDOWS:
+        try:
+            "".encode("oem")
+        except LookupError:
+            return "utf-8"
+        return "oem"
+    return "utf-8"
+
+
 def _write_uninstaller(app_dir: Path, shortcuts: list[str]) -> Path:
-    """Write a small per-user uninstaller that keeps saved projects."""
+    """Write a small per-user uninstaller that keeps saved projects.
+
+    Explorer starts the script with the program folder as the working
+    directory, and cmd.exe cannot remove a folder that is still current, so
+    the script moves to %TEMP% before the rmdir. A nested ``cmd /c`` was tried
+    first, but cmd's quote stripping made paths with ``&`` or ``%`` unreliable.
+    """
+    folder = _batch_rmdir(app_dir)
     shortcuts_block = "\r\n".join(
-        f'del /f /q "{path}" >nul 2>nul' for path in shortcuts)
+        f'del /f /q "{_batch_percent(path)}" >nul 2>nul' for path in shortcuts)
     content = (
         "@echo off\r\n"
         "rem Remove UmbraForge. Editable saves in Documents are kept.\r\n"
         "setlocal\r\n"
         "echo This removes the UmbraForge program folder:\r\n"
-        f'echo   {app_dir}\r\n'
+        f'echo   "{folder}"\r\n'
         "echo Your saved projects in Documents\\UmbraForge are kept.\r\n"
         "choice /c YN /m \"Remove UmbraForge\"\r\n"
         "if errorlevel 2 exit /b 1\r\n"
         f"{shortcuts_block}\r\n"
-        "start \"\" /min cmd /c \"timeout /t 2 /nobreak >nul "
-        f"& rmdir /s /q \\\"{app_dir}\\\"\"\r\n"
+        'cd /d "%TEMP%" 2>nul || cd /d "%SystemRoot%" 2>nul || cd /d C:\\\r\n'
+        "timeout /t 1 /nobreak >nul 2>nul\r\n"
+        f'rmdir /s /q "{folder}"\r\n'
         "exit /b 0\r\n"
     )
     target = app_dir / "Uninstall UmbraForge.cmd"
-    target.write_text(content, encoding="utf-8")
+    with target.open("w", encoding=_batch_encoding(), errors="replace",
+                     newline="") as stream:
+        stream.write(content)
     return target
 
 
@@ -223,9 +262,15 @@ def install(app_dir: Path, payload: Path | None = None,
             create_shortcuts: bool = True, quiet: bool = False,
             data_dir: Path | None = None) -> dict:
     app_dir = Path(app_dir).expanduser().resolve()
+    bundled = bool(payload and payload.exists())
+    if not bundled and getattr(sys, "frozen", False):
+        # A frozen Setup executable has no source tree to fall back on; an
+        # empty "successful" install would be worse than a clear error.
+        raise RuntimeError(
+            "The installer payload is missing. Download the Setup file again.")
     app_dir.mkdir(parents=True, exist_ok=True)
 
-    if payload and payload.exists():
+    if bundled:
         _extract_payload(payload, app_dir)
     else:
         _copy_source(app_dir)
@@ -248,7 +293,7 @@ def install(app_dir: Path, payload: Path | None = None,
         "launcher": str(launcher_path(app_dir) or ""),
         "shortcuts": shortcuts,
         "uninstaller": str(uninstaller),
-        "bundled": bool(payload and payload.exists()),
+        "bundled": bundled,
     }
     (app_dir / CONFIG_NAME).write_text(
         json.dumps(config, indent=2), encoding="utf-8")
@@ -270,9 +315,13 @@ def main(argv: list[str] | None = None) -> int:
 
     app_dir = Path(args.app_dir).expanduser() if args.app_dir else default_app_dir()
     payload = payload_archive()
-    install(app_dir, payload, create_shortcuts=not args.no_shortcuts,
-            quiet=args.quiet or args.auto,
-            data_dir=Path(args.data_dir) if args.data_dir else None)
+    try:
+        install(app_dir, payload, create_shortcuts=not args.no_shortcuts,
+                quiet=args.quiet or args.auto,
+                data_dir=Path(args.data_dir) if args.data_dir else None)
+    except (OSError, RuntimeError) as exc:
+        print(f"setup failed: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

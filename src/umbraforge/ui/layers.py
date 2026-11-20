@@ -206,7 +206,8 @@ class LayersPanel(QWidget):
             item.setForeground(QColor(theme.TEXT if checked else theme.TEXT_DISABLED))
             item.setIcon(self._icon(layer))
             self._guard = False
-            self.changed.emit("Show/hide layer", f"visible-{layer.id}")
+            self.changed.emit("Show/hide layer",
+                              f"visible-{layer.id}-{int(checked)}")
 
     def _on_double_click(self, item: QListWidgetItem) -> None:
         self.rename()
@@ -252,7 +253,9 @@ class LayersPanel(QWidget):
             return
         if self.design().move(layer.id, delta):
             self.refresh()
-            self.changed.emit("Reorder layers", "reorder")
+            self.changed.emit("Reorder layers",
+                              f"reorder-{layer.id}-"
+                              f"{self.design().layers.index(layer)}")
 
     def _to_end(self, front: bool) -> None:
         layer = self.design().active
@@ -262,7 +265,9 @@ class LayersPanel(QWidget):
                    else self.design().to_back(layer.id))
         if changed:
             self.refresh()
-            self.changed.emit("Reorder layers", "reorder")
+            self.changed.emit("Reorder layers",
+                              f"reorder-{layer.id}-"
+                              f"{self.design().layers.index(layer)}")
 
     def duplicate(self) -> None:
         layer = self.design().duplicate()
@@ -270,7 +275,7 @@ class LayersPanel(QWidget):
             return
         self.refresh()
         self.selectionChanged.emit(layer.id)
-        self.changed.emit("Duplicate layer", "duplicate")
+        self.changed.emit("Duplicate layer", f"duplicate-{layer.id}")
 
     def delete(self) -> None:
         design = self.design()
@@ -280,7 +285,7 @@ class LayersPanel(QWidget):
         design.remove(layer.id)
         self.refresh()
         self.selectionChanged.emit(design.selected or "")
-        self.changed.emit("Delete layer", "delete")
+        self.changed.emit("Delete layer", f"delete-{layer.id}")
 
     def toggle_lock(self) -> None:
         layer = self.design().active
@@ -288,4 +293,5 @@ class LayersPanel(QWidget):
             return
         layer.locked = not layer.locked
         self.refresh()
-        self.changed.emit("Lock layer", f"lock-{layer.id}")
+        self.changed.emit("Lock layer",
+                          f"lock-{layer.id}-{int(layer.locked)}")

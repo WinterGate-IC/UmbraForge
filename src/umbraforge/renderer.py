@@ -78,7 +78,7 @@ def _remember(cache: OrderedDict, key, value, limit: int):
 
 
 def _color(value: str, alpha: int = 255) -> QColor:
-    color = QColor(value or "#ffffff")
+    color = QColor(str(value or "#ffffff"))
     if not color.isValid():
         color = QColor("#ffffff")
     color.setAlpha(alpha)

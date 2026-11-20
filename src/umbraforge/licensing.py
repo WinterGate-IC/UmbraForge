@@ -278,19 +278,19 @@ def _candidate_tokens() -> list[str]:
     tokens: list[str] = []
     env = os.environ.get("UMBRAFORGE_LICENSE", "").strip()
     if env:
-        path = Path(env)
-        if path.exists():
-            try:
+        try:
+            path = Path(env)
+            if path.is_file():
                 env = path.read_text(encoding="utf-8").strip()
-            except OSError:
-                env = ""
+        except (OSError, ValueError):
+            env = ""
         if env:
             tokens.append(env)
     for path in (default_license_path(), Path.cwd() / "license.key"):
         try:
             if path.is_file():
                 tokens.append(path.read_text(encoding="utf-8").strip())
-        except OSError:
+        except (OSError, ValueError):
             continue
     return [token for token in tokens if token]
 

@@ -48,6 +48,20 @@ def _blank() -> dict:
     return {"format": "umbraforge-art", "version": 1, "shapes": [], "icons": []}
 
 
+def _timestamp(value) -> float:
+    """Read a stored timestamp without letting a bad edit break the shelf."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _clean_name(name, fallback: str = "Custom art") -> str:
+    """Trim a name and never store an empty label for the shelf."""
+    text = str(name or "").strip()[:60]
+    return text or fallback
+
+
 def load() -> dict:
     path = store_path()
     if not path.exists():
@@ -68,10 +82,10 @@ def load() -> dict:
                         and record["path"].strip()):
                     out[kind + "s"].append({
                         "key": str(record["key"]),
-                        "name": str(record.get("name") or "Custom art"),
+                        "name": _clean_name(record.get("name")),
                         "note": str(record.get("note") or ""),
                         "path": record["path"],
-                        "created": float(record.get("created") or 0.0),
+                        "created": _timestamp(record.get("created")),
                     })
     return out
 
@@ -135,7 +149,7 @@ def add(kind: str, name: str, path_data: str, note: str = "") -> dict:
         index += 1
     record = {
         "key": key,
-        "name": (name or "Custom art").strip()[:60],
+        "name": _clean_name(name),
         "note": (note or "").strip()[:160],
         "path": path_data.strip(),
         "created": time.time(),
@@ -165,7 +179,7 @@ def rename(kind: str, key: str, name: str) -> bool:
     data = load()
     for record in data.get(_plural(kind), []):
         if record["key"] == key:
-            record["name"] = (name or record["name"]).strip()[:60]
+            record["name"] = _clean_name(name, record["name"])
             save(data)
             return True
     return False

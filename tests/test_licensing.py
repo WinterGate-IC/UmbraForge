@@ -142,6 +142,17 @@ def test_describe_status_without_licence(monkeypatch: pytest.MonkeyPatch) -> Non
     assert status["machine"]
 
 
+def test_a_corrupt_licence_file_is_ignored(tmp_path,
+                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "license.key"
+    target.write_bytes(b"\xff\xfe not utf-8")
+    monkeypatch.setattr(licensing, "default_license_path", lambda: target)
+    monkeypatch.delenv("UMBRAFORGE_LICENSE", raising=False)
+
+    assert licensing.active_license(refresh=True) is None
+    assert licensing.describe_status()["licensed"] is False
+
+
 def test_machine_id_is_stable_and_not_the_raw_guid() -> None:
     first = licensing.machine_id()
     assert first == licensing.machine_id()

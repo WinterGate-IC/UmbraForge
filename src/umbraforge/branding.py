@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "UmbraForge"
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 COMPANY = "WinterGate Intelligence Collective"
 COMPANY_SHORT = "WIC"
 OWNER = "AnonCatalyst"

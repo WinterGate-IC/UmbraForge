@@ -56,6 +56,8 @@ class CanvasView(QWidget):
         self._pan_origin = QPointF()
         self._pan_start = QPointF()
         self._dragging_live = False
+        self._gesture = 0
+        self._nudge_serial = 0
 
         self.setMinimumSize(420, 380)
         self.setMouseTracking(True)
@@ -341,9 +343,10 @@ class CanvasView(QWidget):
                                         layer.cy * design.height)
                 angle = math.degrees(math.atan2(pos.y() - center.y(),
                                                 pos.x() - center.x()))
+                self._gesture += 1
                 self._drag = {"mode": "rotate", "layer": layer, "center": center,
                               "start_angle": angle, "start_rotation": layer.rotation,
-                              "moved": False}
+                              "gesture": self._gesture, "moved": False}
             else:
                 self._drag = self._begin_scale(layer, pos, handle[1])
             return
@@ -364,10 +367,11 @@ class CanvasView(QWidget):
         if hit.locked:
             self.update()
             return
+        self._gesture += 1
         self._drag = {"mode": "move", "layer": hit,
                       "start": canvas_point,
                       "start_x": hit.x, "start_y": hit.y,
-                      "moved": False}
+                      "gesture": self._gesture, "moved": False}
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
     def _begin_scale(self, layer: Layer, point: QPointF, handle: int) -> dict:
@@ -386,6 +390,7 @@ class CanvasView(QWidget):
         corners = [rect.topLeft(), rect.topRight(), rect.bottomRight(),
                    rect.bottomLeft()]
         fixed_index = {0: 2, 1: 3, 2: 0, 3: 1}[handle]
+        self._gesture += 1
         return {
             "mode": "scale", "layer": layer, "handle": handle,
             "center": center, "rect": rect, "rotation": layer.rotation,
@@ -395,7 +400,7 @@ class CanvasView(QWidget):
             "start_local": to_local(self.to_design(point)),
             "to_local": to_local,
             "start_geom": (layer.x, layer.y, layer.w, layer.h),
-            "moved": False,
+            "gesture": self._gesture, "moved": False,
         }
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -516,7 +521,8 @@ class CanvasView(QWidget):
         if drag.get("moved"):
             label = {"move": "Move layer", "scale": "Resize layer",
                      "rotate": "Rotate layer"}.get(drag["mode"], "Transform")
-            self.changed.emit(label, f"{drag['mode']}-{drag['layer'].id}")
+            self.changed.emit(
+                label, f"{drag['mode']}-{drag['layer'].id}-{drag['gesture']}")
         self._update_cursor(QPointF(event.position()))
 
     def _snap(self, layer: Layer, x: float, y: float) -> tuple[float, float]:
@@ -626,7 +632,8 @@ class CanvasView(QWidget):
             return
         layer.x += dx / self.design().width
         layer.y += dy / self.design().height
-        self.changed.emit("Nudge layer", f"nudge-{layer.id}")
+        self.changed.emit("Nudge layer",
+                          f"nudge-{layer.id}-{self._nudge_serial}")
         self._dirty = True
         self.update()
 
@@ -636,6 +643,11 @@ class CanvasView(QWidget):
             self._update_cursor(QPointF(self.mapFromGlobal(
                 self.cursor().pos())))
             return
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right,
+                           Qt.Key.Key_Up, Qt.Key.Key_Down):
+            # Key repeat coalesces into one nudge step; a fresh press after
+            # release starts a new undo entry.
+            self._nudge_serial += 1
         super().keyReleaseEvent(event)
 
     # ---------------------------------------------------------- context menu
