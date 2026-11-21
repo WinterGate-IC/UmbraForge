@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import subprocess
 import time
@@ -106,30 +107,60 @@ def test_uninstaller_uses_cmd_quoting(tmp_path):
 
     text = script.read_text(encoding="utf-8", errors="replace")
     assert 'cd /d "%TEMP%"' in text
-    assert 'rmdir /s /q "' in text
+    assert 'rmdir /s /q "%UMBRAFORGE_HOME%"' in text
+    assert '%~f0' in text
     assert '\\"' not in text
     assert "\r\r\n" not in text
 
 
-def test_uninstaller_doubles_percent_signs(tmp_path):
-    app_dir = tmp_path / "Programs" / "100% Real"
+def test_uninstaller_is_ascii_and_derives_its_folder(tmp_path):
+    # cmd.exe decodes a .cmd file with the active console code page, which is
+    # not the same on every machine. Nothing in the script may depend on it.
+    app_dir = tmp_path / "Programs" / "UmbraForge caf\u00e9"
     app_dir.mkdir(parents=True)
 
     script = installer_core._write_uninstaller(app_dir, [])
 
     text = script.read_text(encoding="utf-8", errors="replace")
-    assert "100%% Real" in text
-    assert 'rmdir /s /q "' in text
+    assert text.isascii()
+    assert "caf" not in text.lower()
+    assert 'for %%I in ("%~f0") do set "UMBRAFORGE_HOME=%%~dpI"' in text
 
 
-def _oem_ready() -> bool:
+def test_uninstaller_doubles_percent_signs_in_shortcut_paths(tmp_path):
+    app_dir = tmp_path / "UmbraForge"
+    app_dir.mkdir()
+    shortcut = tmp_path / "Desktop" / "100% Real.lnk"
+
+    script = installer_core._write_uninstaller(app_dir, [str(shortcut)])
+
+    text = script.read_text(encoding="utf-8", errors="replace")
+    assert "100%% Real.lnk" in text
+    assert 'del /f /q "' in text
+
+
+def _set_console_code_page(code_page):
+    """Switch the console code page cmd.exe inherits, if there is a console."""
     if not installer_core.IS_WINDOWS:
-        return False
+        return None
     try:
-        "UmbraForge caf\u00e9".encode("oem")
-    except (LookupError, UnicodeError):
-        return False
-    return True
+        kernel32 = ctypes.windll.kernel32
+        previous = (kernel32.GetConsoleCP(), kernel32.GetConsoleOutputCP())
+        if not previous[0] or not previous[1]:
+            return None
+        kernel32.SetConsoleCP(code_page)
+        kernel32.SetConsoleOutputCP(code_page)
+    except (AttributeError, OSError):
+        return None
+    return kernel32, previous
+
+
+def _restore_console_code_page(state) -> None:
+    if state is None:
+        return
+    kernel32, previous = state
+    kernel32.SetConsoleCP(previous[0])
+    kernel32.SetConsoleOutputCP(previous[1])
 
 
 def _run_uninstaller(script) -> None:
@@ -164,7 +195,7 @@ def test_uninstaller_removes_the_program_folder(tmp_path, name):
     assert not shortcut.exists()
 
 
-@pytest.mark.skipif(not _oem_ready(), reason="needs an OEM code page")
+@pytest.mark.skipif(not installer_core.IS_WINDOWS, reason="uses cmd.exe")
 def test_uninstaller_handles_a_non_ascii_folder(tmp_path):
     app_dir = tmp_path / "Programs" / "UmbraForge caf\u00e9"
     (app_dir / "assets").mkdir(parents=True)
@@ -172,6 +203,27 @@ def test_uninstaller_handles_a_non_ascii_folder(tmp_path):
     script = installer_core._write_uninstaller(app_dir, [])
 
     _run_uninstaller(script)
+
+    assert not app_dir.exists()
+
+
+@pytest.mark.skipif(not installer_core.IS_WINDOWS, reason="uses cmd.exe")
+@pytest.mark.parametrize("code_page", [437, 1252, 65001])
+def test_uninstaller_ignores_the_console_code_page(tmp_path, code_page):
+    # CI runs with a different console code page than a developer desktop.
+    # The script must not depend on it at all.
+    app_dir = tmp_path / "Programs" / "UmbraForge caf\u00e9"
+    (app_dir / "assets").mkdir(parents=True)
+    (app_dir / "assets" / "mark.txt").write_text("x", encoding="utf-8")
+    script = installer_core._write_uninstaller(app_dir, [])
+
+    state = _set_console_code_page(code_page)
+    if state is None:
+        pytest.skip("no console to change the code page on")
+    try:
+        _run_uninstaller(script)
+    finally:
+        _restore_console_code_page(state)
 
     assert not app_dir.exists()
 

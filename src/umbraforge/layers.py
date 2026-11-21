@@ -12,6 +12,7 @@ import base64
 import copy
 import hashlib
 import json
+import math
 import os
 import tempfile
 import time
@@ -149,6 +150,67 @@ def merge(defaults: dict, values: dict | None) -> dict:
     return out
 
 
+def _typed(value, default):
+    """Return *value* when it has the shape of *default*, else *default*.
+
+    Saved files are user-editable, so a background angle may arrive as a
+    string or a colour as a number. The renderer reads those keys with
+    ``float(...)``, which would abort the whole render.
+    """
+    if isinstance(default, bool):
+        return value if isinstance(value, bool) else default
+    if isinstance(default, (int, float)):
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return default
+        if not math.isfinite(number):
+            return default
+        return number if isinstance(default, float) else int(number)
+    if isinstance(default, str):
+        return value if isinstance(value, str) else default
+    return value if value is not None else copy.deepcopy(default)
+
+
+def clean_background(values) -> dict:
+    """Merge a saved background over the defaults and repair its types."""
+    defaults = default_background()
+    background = merge(defaults, values)
+    for key, default in defaults.items():
+        background[key] = _typed(background.get(key), default)
+    return background
+
+
+def clean_adjustments(values) -> dict:
+    """Merge a saved adjustment stack over the defaults, repairing types.
+
+    The inspector converts every entry with ``float(...)``, so a hand-edited
+    string or list would otherwise raise as soon as an image layer is selected.
+    """
+    defaults = ADJUSTMENT_DEFAULTS
+    adjustments = merge(defaults, values)
+    for key, default in defaults.items():
+        adjustments[key] = _typed(adjustments.get(key), default)
+    return adjustments
+
+
+def clean_stack(defaults: dict, values) -> dict:
+    """Merge a saved effect or overlay stack over *defaults*, repairing types.
+
+    Stacks nest one level (``glow: {enabled, size, ...}``) and the inspector
+    turns those numbers into widgets, so a hand-edited ``"size": "big"`` would
+    otherwise crash the panel as soon as the layer is selected.
+    """
+    stack = merge(defaults, values)
+    for key, default in defaults.items():
+        value = stack.get(key)
+        if isinstance(default, dict):
+            stack[key] = clean_stack(default, value)
+        else:
+            stack[key] = _typed(value, default)
+    return stack
+
+
 def _whole(value, fallback: int) -> int:
     """Read a pixel count from a possibly hand-edited value."""
     try:
@@ -218,7 +280,7 @@ class Layer:
         self.opacity = _clamp(self.opacity, 0.0, 1.0, 1.0)
         if self.blend not in BLEND_KEYS:
             self.blend = "normal"
-        self.effects = merge(default_effects(), self.effects)
+        self.effects = clean_stack(default_effects(), self.effects)
 
     # ---- serialization ------------------------------------------------
     def payload(self) -> dict:
@@ -260,7 +322,7 @@ class Layer:
         self.rotation = _clamp(data.get("rotation", 0.0), -360.0, 360.0, 0.0)
         self.flip_h = bool(data.get("flip_h", False))
         self.flip_v = bool(data.get("flip_v", False))
-        self.effects = merge(default_effects(), data.get("effects"))
+        self.effects = clean_stack(default_effects(), data.get("effects"))
 
     @classmethod
     def from_dict(cls, data: dict) -> "Layer":
@@ -448,7 +510,7 @@ class ImageLayer(Layer):
             self.fit = "fill"
         self.mask = str(data.get("mask") or "none")
         self.mask_feather = _clamp(data.get("mask_feather", 0.0), 0.0, 0.4, 0.0)
-        self.adjustments = merge(default_adjustments(), data.get("adjustments"))
+        self.adjustments = clean_adjustments(data.get("adjustments"))
 
 
 LAYER_TYPES: dict[str, type[Layer]] = {
@@ -666,8 +728,8 @@ class Design:
         self.name = str(data.get("name") or "Untitled")
         self.set_size(_whole(data.get("width"), 1200),
                       _whole(data.get("height"), 1200))
-        self.background = merge(default_background(), data.get("background"))
-        self.overlays = merge(default_overlays(), data.get("overlays"))
+        self.background = clean_background(data.get("background"))
+        self.overlays = clean_stack(default_overlays(), data.get("overlays"))
         assets = data.get("assets")
         # A hand-edited file can replace the asset table with a list; keep the
         # project loadable instead of raising a bare TypeError.

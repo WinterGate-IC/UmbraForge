@@ -45,6 +45,21 @@ def test_render_design_uses_requested_size_and_background(qapp):
     assert alpha_map(image).min() == 255
 
 
+def test_render_repairs_a_corrupt_background(qapp):
+    design = simple_design()
+    design.background = {
+        "kind": "linear", "color": 12, "color2": {"bad": True},
+        "angle": "tilt", "pattern": "dots", "pattern_color": [1, 2],
+        "pattern_opacity": "lots", "pattern_scale": None,
+        "vignette": "deep", "opacity": "1.0", "asset_id": 5,
+    }
+
+    image = renderer.render_design(design, 160, 120)
+
+    assert not image.isNull()
+    assert alpha_map(image).min() == 255
+
+
 def test_render_design_can_be_transparent(qapp):
     image = renderer.render_design(simple_design(), 200, 150, background=False)
     alpha = alpha_map(image)

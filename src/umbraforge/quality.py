@@ -135,7 +135,7 @@ def sample_device(refresh: bool = False) -> DeviceProfile:
         measured = False
     try:
         disk = shutil.disk_usage(str(Path.home())).free / MB
-    except OSError:
+    except Exception:
         disk = 0.0
     try:
         cpus = os.cpu_count() or 1

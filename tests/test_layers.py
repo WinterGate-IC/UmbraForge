@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import struct
 
 import pytest
@@ -83,6 +84,67 @@ def test_design_loads_with_a_corrupt_background():
     assert isinstance(design.background, dict)
     assert "kind" in design.background
     assert isinstance(design.overlays, dict)
+
+
+def test_design_repairs_corrupt_background_values():
+    design = Design()
+    design.load_dict({
+        "name": "Broken", "layers": [],
+        "background": {
+            "angle": "tilt", "pattern_opacity": [1], "pattern_scale": None,
+            "vignette": "deep", "color": 12, "color2": {"nested": True},
+            "pattern": 7, "opacity": "1.0",
+        },
+    })
+
+    background = design.background
+    assert background["angle"] == 135.0
+    assert background["pattern_opacity"] == 0.07
+    assert background["pattern_scale"] == 0.35
+    assert background["vignette"] == 0.25
+    assert background["color"] == "#0a0a10"
+    assert background["color2"] == "#26123a"
+    assert background["pattern"] == "none"
+    assert background["opacity"] == 1.0
+
+    json.dumps(design.to_dict())  # the repaired background stays serialisable
+
+
+def test_design_repairs_corrupt_effects_and_overlays():
+    design = Design()
+    design.load_dict({
+        "name": "Broken",
+        "layers": [{
+            "kind": "text", "text": "Hi",
+            "effects": {
+                "preset": 7,
+                "glow": {"enabled": "yes", "size": "huge", "opacity": [1],
+                         "color": 5},
+                "shadow": {"blur": None, "dx": "x", "dy": 1e400},
+            },
+        }],
+        "overlays": {
+            "preset": 3,
+            "grain": {"enabled": "true", "size": "big", "opacity": "*"},
+        },
+    })
+
+    effects = design.layers[0].effects
+    assert effects["preset"] == ""
+    assert effects["glow"]["enabled"] is False
+    assert effects["glow"]["size"] == 0.022
+    assert effects["glow"]["opacity"] == 0.55
+    assert effects["glow"]["color"] == "#ff7a3d"
+    assert effects["shadow"]["blur"] == 0.018
+    assert effects["shadow"]["dx"] == 0.004
+    assert effects["shadow"]["dy"] == 0.006
+
+    grain = design.overlays["grain"]
+    assert grain["enabled"] is False
+    assert grain["size"] == 0.5
+    assert grain["opacity"] == 0.18
+
+    json.dumps(design.to_dict())  # the repaired stacks stay serialisable
 
 
 def test_design_loads_with_a_corrupt_asset_table():

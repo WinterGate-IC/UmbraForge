@@ -210,6 +210,14 @@ def test_forget_project_resolves_equivalent_paths(window, tmp_path):
     assert window.library_panel._resume_target is None
 
 
+def test_recent_projects_ignore_unusable_entries(window, tmp_path):
+    path = Design(name="Keep Me").save(tmp_path / "keep.umbra")
+
+    window.library_panel.set_recent_projects([None, 3, path])
+
+    assert window.library_panel._recent_paths == [path]
+
+
 def test_missing_recent_projects_are_dropped(window, tmp_path):
     path = Design(name="Gone Project").save(tmp_path / "gone.umbra")
     window._remember_project(path)

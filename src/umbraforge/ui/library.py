@@ -612,10 +612,17 @@ class LibraryPanel(QWidget):
 
     def set_recent_projects(self, paths) -> None:
         """Show the projects the window has opened or saved recently."""
+        if isinstance(paths, (str, Path)):
+            paths = [paths]
         seen: list[Path] = []
-        for item in paths:
-            path = Path(item)
-            if path.exists() and path not in seen:
+        for item in paths or []:
+            try:
+                path = Path(item)
+                if not path.exists():
+                    continue
+            except (TypeError, ValueError, OSError):
+                continue
+            if path not in seen:
                 seen.append(path)
         self._recent_paths = seen[:5]
         if hasattr(self, "_resume_button"):

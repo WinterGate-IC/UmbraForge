@@ -206,7 +206,7 @@ def _batch_percent(value) -> str:
 
 
 def _batch_rmdir(value) -> str:
-    """Escape a path for a plain ``rmdir /s /q "<path>"`` line in a .cmd file.
+    """Escape a literal path for a quoted ``del`` or ``rmdir`` line in a .cmd.
 
     Batch quoting keeps ``&``, ``()`` and ``^`` literal, but percent signs are
     still expanded while the file is read, so they have to be doubled.
@@ -214,45 +214,67 @@ def _batch_rmdir(value) -> str:
     return _batch_percent(value)
 
 
-def _batch_encoding() -> str:
-    """The code page cmd.exe uses when it reads a .cmd file."""
-    if IS_WINDOWS:
-        try:
-            "".encode("oem")
-        except LookupError:
-            return "utf-8"
-        return "oem"
-    return "utf-8"
+def _shortcut_deletions(shortcuts: list[str]) -> str:
+    """Build the ``del`` lines that remove the per-user shortcuts.
+
+    The two standard shortcut locations are addressed through
+    ``%USERPROFILE%`` / ``%APPDATA%`` so the script stays ASCII even when the
+    profile path itself has accents. Extra paths (tests, custom installs) are
+    written literally with ``%`` doubled.
+    """
+    standard = _shortcut_targets()
+    standard_keys = {os.path.normcase(str(path)) for path in standard}
+    lines = [
+        f'del /f /q "{path}" >nul 2>nul'
+        for path in (
+            r"%USERPROFILE%\Desktop" f"\\{APP_NAME}.lnk",
+            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs"
+            f"\\{APP_NAME}.lnk",
+        )
+    ]
+    lines.extend(
+        f'del /f /q "{_batch_rmdir(path)}" >nul 2>nul'
+        for path in shortcuts
+        if os.path.normcase(str(path)) not in standard_keys
+    )
+    return "\r\n".join(lines)
 
 
 def _write_uninstaller(app_dir: Path, shortcuts: list[str]) -> Path:
     """Write a small per-user uninstaller that keeps saved projects.
+
+    The script contains no path of its own: it works the program folder out
+    from ``%~f0`` at run time. cmd.exe decodes a .cmd file with the active
+    console code page, and that code page differs between machines (437, 1252,
+    65001, ...), so a literal path with accents would be mis-read on some of
+    them. ``%~f0`` comes from the real file system path and is safe either way.
 
     Explorer starts the script with the program folder as the working
     directory, and cmd.exe cannot remove a folder that is still current, so
     the script moves to %TEMP% before the rmdir. A nested ``cmd /c`` was tried
     first, but cmd's quote stripping made paths with ``&`` or ``%`` unreliable.
     """
-    folder = _batch_rmdir(app_dir)
-    shortcuts_block = "\r\n".join(
-        f'del /f /q "{_batch_percent(path)}" >nul 2>nul' for path in shortcuts)
+    shortcuts_block = _shortcut_deletions(shortcuts)
     content = (
         "@echo off\r\n"
         "rem Remove UmbraForge. Editable saves in Documents are kept.\r\n"
+        "rem The folder is derived from this script so accents, '&' and '%'\r\n"
+        "rem in the install path survive any console code page.\r\n"
         "setlocal\r\n"
+        'for %%I in ("%~f0") do set "UMBRAFORGE_HOME=%%~dpI"\r\n'
         "echo This removes the UmbraForge program folder:\r\n"
-        f'echo   "{folder}"\r\n'
+        'echo   "%UMBRAFORGE_HOME%"\r\n'
         "echo Your saved projects in Documents\\UmbraForge are kept.\r\n"
         "choice /c YN /m \"Remove UmbraForge\"\r\n"
         "if errorlevel 2 exit /b 1\r\n"
         f"{shortcuts_block}\r\n"
         'cd /d "%TEMP%" 2>nul || cd /d "%SystemRoot%" 2>nul || cd /d C:\\\r\n'
         "timeout /t 1 /nobreak >nul 2>nul\r\n"
-        f'rmdir /s /q "{folder}"\r\n'
+        'rmdir /s /q "%UMBRAFORGE_HOME%"\r\n'
         "exit /b 0\r\n"
     )
     target = app_dir / "Uninstall UmbraForge.cmd"
-    with target.open("w", encoding=_batch_encoding(), errors="replace",
+    with target.open("w", encoding="ascii", errors="replace",
                      newline="") as stream:
         stream.write(content)
     return target

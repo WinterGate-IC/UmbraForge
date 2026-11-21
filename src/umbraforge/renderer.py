@@ -183,7 +183,7 @@ def _gradient_brush(rect: QRectF, color: str, color2: str,
 
 def _paint_background(painter: QPainter, design: layers.Design,
                       width: int, height: int) -> None:
-    settings = layers.merge(layers.default_background(), design.background)
+    settings = layers.clean_background(design.background)
     kind = settings.get("kind", "linear")
     rect = QRectF(0, 0, width, height)
     if kind == "transparent":

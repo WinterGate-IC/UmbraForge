@@ -364,6 +364,37 @@ def test_preset_switch_reflows_canvas(window):
     assert (window.design.width, window.design.height) == (1080, 1920)
 
 
+def test_inspector_survives_corrupt_effects(window):
+    layer = window.design.active
+    layer.effects = {
+        "preset": 4,
+        "glow": {"enabled": "yes", "size": "big", "opacity": [1],
+                 "color": 3},
+        "shadow": {"blur": None, "dx": "x", "dy": {}},
+    }
+
+    window.inspector.refresh()
+
+    assert layer.effects["glow"]["size"] == 0.022
+    assert layer.effects["shadow"]["blur"] == 0.018
+    assert layer.effects["glow"]["enabled"] is False
+
+
+def test_inspector_survives_a_corrupt_background(window):
+    window.design.background = {
+        "kind": "linear", "color": 12, "color2": None, "angle": "tilt",
+        "pattern": "dots", "pattern_color": [1], "pattern_opacity": "lots",
+        "pattern_scale": {}, "vignette": [], "opacity": "1.0",
+        "asset_id": 5,
+    }
+
+    window.inspector.refresh()
+    window.inspector._swap_background_colours()
+
+    assert isinstance(window.design.background["angle"], float)
+    assert window.inspector.bg_angle.value() == 135
+
+
 def test_applying_a_template_replaces_the_design(window):
     window._apply_template("laurel_standard")
     assert window.design.name == "Laurel Standard"

@@ -377,6 +377,8 @@ class Inspector(QWidget):
         self._labeled(self.layer_layout, "Blend", blend)
 
     def _effects_section(self, layer: layers.Layer) -> None:
+        layer.effects = layers.clean_stack(layers.default_effects(),
+                                           layer.effects)
         self._section(self.layer_layout, "Effects")
         style_items = [("", "No effects / custom")] + [
             (preset.key, preset.label) for preset in effects.PRESETS
@@ -1150,7 +1152,7 @@ class Inspector(QWidget):
         if self._loading:
             return
         design = self.design()
-        background = layers.merge(layers.default_background(), design.background)
+        background = layers.clean_background(design.background)
         first = background.get("color", "#0a0a10")
         background["color"] = background.get("color2", "#26123a")
         background["color2"] = first
@@ -1194,7 +1196,8 @@ class Inspector(QWidget):
         self._sync_canvas()
 
     def _overlay_stack(self) -> dict:
-        return layers.merge(overlays.default_stack(), self.design().overlays)
+        return layers.clean_stack(overlays.default_stack(),
+                                  self.design().overlays)
 
     def _rebuild_mix_controls(self) -> None:
         if not hasattr(self, "overlay_mix_layout"):
@@ -1240,7 +1243,7 @@ class Inspector(QWidget):
         if self._loading:
             return
         design = self.design()
-        stack = layers.merge(overlays.default_stack(), design.overlays)
+        stack = layers.clean_stack(overlays.default_stack(), design.overlays)
         entry = dict(stack.get(name) or overlays.OVERLAY_DEFAULTS.get(name, {}))
         entry[key] = int(round(value)) if key == "count" else value
         stack[name] = entry
@@ -1332,7 +1335,7 @@ class Inspector(QWidget):
         self.size_info.setText(
             f"{design.width:,} \u00d7 {design.height:,} px  \u00b7  "
             f"{design.preset.ratio_label}  \u00b7  {len(design.layers)} layers")
-        background = layers.merge(layers.default_background(), design.background)
+        background = layers.clean_background(design.background)
         preset_key = ""
         for preset in backgrounds.PRESETS:
             if all(background.get(name) == value
@@ -1358,7 +1361,7 @@ class Inspector(QWidget):
         self.bg_pattern_scale.set_value(
             float(background.get("pattern_scale", 0.35)) * 100)
         self.bg_vignette.set_value(float(background.get("vignette", 0.25)) * 100)
-        stack = layers.merge(overlays.default_stack(), design.overlays)
+        stack = layers.clean_stack(overlays.default_stack(), design.overlays)
         overlay_key = str(stack.get("preset") or "")
         if not overlays.any_enabled(stack):
             overlay_key = ""
