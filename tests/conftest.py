@@ -6,12 +6,56 @@ module. ``conftest.py`` is loaded first, so doing it here is enough.
 
 from __future__ import annotations
 
+import atexit
 import os
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.*=false")
 
 import pytest
+
+#: Set in ``pytest_sessionfinish`` and consumed by ``pytest_unconfigure``.
+_exit_status: int | None = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    global _exit_status
+    _exit_status = int(exitstatus)
+
+
+def pytest_unconfigure(config):
+    """Leave without letting Qt tear down the offscreen platform plugin.
+
+    PySide6 6.12 occasionally aborts while the interpreter finalises, *after*
+    every test has passed. That makes an otherwise green CI run report a
+    failure. Register an ``atexit`` handler (LIFO, so it runs before Qt's) that
+    ends the process with the status pytest computed.
+    """
+    if _exit_status is None:
+        return
+    if not (sys.platform.startswith("win")
+            and os.environ.get("QT_QPA_PLATFORM") == "offscreen"):
+        return
+
+    reporter = config.pluginmanager.getplugin("terminalreporter")
+    writer = getattr(reporter, "_tw", None)
+
+    def leave() -> None:
+        for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
+            try:
+                if stream is not None:
+                    stream.flush()
+            except Exception:
+                pass
+        try:
+            if writer is not None:
+                writer.flush()
+        except Exception:
+            pass
+        os._exit(_exit_status)
+
+    atexit.register(leave)
 
 
 @pytest.fixture(scope="session")
