@@ -110,8 +110,8 @@ it you will find:
 
 | Item | What it is |
 |---|---|
-| `UmbraForge-0.1.6-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
-| `UmbraForge-Setup-0.1.6.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
+| `UmbraForge-0.1.7-windows-x64.zip` | **Main package** - portable app with its own Python runtime. Unzip and double-click `UmbraForge.exe`. No installation needed. |
+| `UmbraForge-Setup-0.1.7.exe` | **Installer** - fully offline. It contains the same package, copies it to a folder you choose and records the install. |
 | `README.md` | This file. |
 | `LICENSE` | MIT licence and WinterGate notices. |
 | `THIRD_PARTY_NOTICES.md` | Licences for the libraries bundled in the package. |
@@ -310,7 +310,7 @@ copy when you want to come back and edit.
 {
   "format": "umbraforge",
   "version": 1,
-  "saved_with": "UmbraForge 0.1.6",
+  "saved_with": "UmbraForge 0.1.7",
   "saved_at": "2026-10-26T12:34:56+00:00",
   "name": "Ember Sigil",
   "width": 1200,
@@ -412,11 +412,24 @@ umbraforge/
 
 ## Status
 
-Version 0.1.6 is the current Windows release. It ships as one timestamped
+Version 0.1.7 is the current Windows release. It ships as one timestamped
 release bundle attached to the GitHub release and containing the portable
 package, the offline per-user installer, `README.md`, `LICENSE` and
 `THIRD_PARTY_NOTICES.md`, built by `tools/build_release.py`. The source tree
 also runs directly (see **Install**).
+
+What changed in 0.1.7:
+
+- the **uninstaller** no longer embeds the install path in the `.cmd` file; it
+  derives its folder from its own location, so it works whatever console code
+  page Windows uses, including paths with accented characters;
+- effect, overlay and background stacks are now type-checked while a project
+  loads, so a hand-edited number or colour cannot crash the inspector or the
+  canvas renderer;
+- recent-project entries ignore unusable values, and the quality sampler
+  tolerates a drive that cannot be probed;
+- the Windows test workflow pins UTF-8, adds a timeout and avoids a PySide6
+  teardown crash that could mark an all-green run as failed.
 
 What changed in 0.1.6:
 
